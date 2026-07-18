@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Insert LaTeX</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <form id="latex-form">
+      <label for="latex">LaTeX</label>
+      <textarea id="latex" name="latex" rows="4" autofocus placeholder="\frac{1}{2}" required></textarea>
+      <label class="display-option">
+        <input id="display" name="display" type="checkbox">
+        Display style
+      </label>
+      <button type="submit">Insert into Gmail</button>
+      <output id="status" role="status" aria-live="polite"></output>
+    </form>
+    <p class="hint">You can also select LaTeX in a draft, right-click it, and choose “Render LaTeX.”</p>
+    <script src="popup.js"></script>
+  </body>
+</html>

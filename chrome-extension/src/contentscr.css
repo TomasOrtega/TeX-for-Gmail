@@ -1,0 +1,24 @@
+#tex-for-gmail-status {
+  background: #202124;
+  border-radius: 4px;
+  bottom: 24px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+  color: #fff;
+  font: 13px/20px Arial, sans-serif;
+  left: 50%;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 16px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+}
+
+#tex-for-gmail-status[data-state="error"] {
+  background: #b3261e;
+}
+
+.tex-for-gmail-image {
+  height: auto;
+  max-width: 100%;
+  vertical-align: middle;
+}

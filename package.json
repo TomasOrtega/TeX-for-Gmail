@@ -1,0 +1,50 @@
+{
+  "name": "tex-for-gmail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Render LaTeX in Gmail drafts with Firefox and Chrome extensions.",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=22.8.0"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0"
+  },
+  "scripts": {
+    "audit": "npm audit --audit-level=high",
+    "artifacts:update": "node scripts/update-artifact-lock.js",
+    "build": "node scripts/build-extension.js --all",
+    "build:chrome": "node scripts/build-extension.js chrome",
+    "build:firefox": "node scripts/build-extension.js firefox",
+    "coverage:check": "node scripts/coverage-badge.js --check",
+    "coverage:update": "npm run test:coverage && node scripts/coverage-badge.js --write",
+    "icons:check": "node scripts/generate-icons.js --check",
+    "lint": "npm run lint:firefox",
+    "lint:firefox": "npm run stage:firefox && web-ext lint --source-dir build/firefox --warnings-as-errors",
+    "pretest:coverage": "node -e \"require('node:fs').mkdirSync('coverage', { recursive: true })\"",
+    "stage": "node scripts/stage-extension.js --all",
+    "stage:chrome": "node scripts/stage-extension.js chrome",
+    "stage:firefox": "node scripts/stage-extension.js firefox",
+    "start:firefox": "npm run stage:firefox && web-ext run --source-dir build/firefox",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"chrome-extension/popup/*.js\" --test-coverage-include=\"chrome-extension/src/*.js\" --test-coverage-lines=100 --test-coverage-branches=60 --test-coverage-functions=65 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
+    "trace:tex": "node scripts/trace-tex-resources.js --local",
+    "validate": "npm run vendor:browserfs:check && npm run vendor:mupdf:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run coverage:check && npm run lint && npm run build && npm run verify:zip && npm run audit",
+    "vendor:browserfs": "node scripts/vendor-browserfs.js",
+    "vendor:browserfs:check": "node scripts/vendor-browserfs.js --check",
+    "vendor:mupdf": "node scripts/vendor-mupdf.js",
+    "vendor:mupdf:check": "node scripts/vendor-mupdf.js --check",
+    "vendor:texlive": "node scripts/vendor-texlive.js",
+    "verify:artifacts": "node scripts/verify-artifacts.js",
+    "verify:release": "node scripts/verify-release.js",
+    "verify:zip": "node scripts/verify-zip.js --all",
+    "verify:zip:chrome": "node scripts/verify-zip.js chrome",
+    "verify:zip:firefox": "node scripts/verify-zip.js firefox"
+  },
+  "devDependencies": {
+    "adm-zip": "0.6.0",
+    "browserfs": "2.0.0",
+    "mupdf": "1.28.0",
+    "web-ext": "10.5.0"
+  }
+}
