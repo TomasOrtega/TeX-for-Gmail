@@ -96,6 +96,39 @@ function pngAlphaBounds(filename) {
   return bounds;
 }
 
+function storedPngRows(filename) {
+  const png = fs.readFileSync(filename);
+  const compressed = [];
+  for (let offset = 8; offset < png.length;) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("ascii");
+    if (type === "IDAT")
+      compressed.push(png.subarray(offset + 8, offset + 8 + length));
+    offset += length + 12;
+  }
+
+  const stream = Buffer.concat(compressed);
+  assert.deepEqual([...stream.subarray(0, 2)], [0x78, 0x01]);
+  const blocks = [];
+  let final = false;
+  let offset = 2;
+  while (!final) {
+    const header = stream[offset++];
+    final = (header & 1) === 1;
+    assert.equal(header & 0xfe, 0);
+    const length = stream.readUInt16LE(offset);
+    const inverseLength = stream.readUInt16LE(offset + 2);
+    offset += 4;
+    assert.equal((length ^ inverseLength) & 0xffff, 0xffff);
+    blocks.push(stream.subarray(offset, offset + length));
+    offset += length;
+  }
+  assert.equal(offset, stream.length - 4);
+  const rows = Buffer.concat(blocks);
+  assert.ok(rows.equals(zlib.inflateSync(stream)));
+  return rows;
+}
+
 test("target manifests keep their shared product fields synchronized", () => {
   for (const key of [
     "author",
@@ -217,6 +250,21 @@ test("Chrome icons are RGBA PNGs at their declared dimensions", () => {
       minY: 16
     }
   );
+});
+
+test("Chrome icons use platform-independent stored DEFLATE", () => {
+  for (const size of [16, 32, 48, 128]) {
+    const filename = path.join(
+      extensionRoot,
+      "icons",
+      `icon-${size}.png`
+    );
+    const rows = storedPngRows(filename);
+    const stride = size * 4 + 1;
+    assert.equal(rows.length, stride * size);
+    for (let y = 0; y < size; y++)
+      assert.equal(rows[y * stride], 0);
+  }
 });
 
 test("platform hosts load only their required shared scripts", () => {

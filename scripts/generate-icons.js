@@ -3,7 +3,6 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const zlib = require("node:zlib");
 
 const root = path.join(__dirname, "..");
 const outputDirectory = path.join(root, "chrome-extension", "icons");
@@ -29,6 +28,35 @@ function pngChunk(type, data) {
   data.copy(chunk, 8);
   chunk.writeUInt32BE(crc32(Buffer.concat([name, data])), 8 + data.length);
   return chunk;
+}
+
+function adler32(buffer) {
+  let first = 1;
+  let second = 0;
+  for (const byte of buffer) {
+    first = (first + byte) % 65521;
+    second = (second + first) % 65521;
+  }
+  return ((second << 16) | first) >>> 0;
+}
+
+function storedDeflate(buffer) {
+  const chunks = [Buffer.from([0x78, 0x01])];
+  for (let offset = 0; offset < buffer.length;) {
+    const length = Math.min(0xffff, buffer.length - offset);
+    const final = offset + length === buffer.length;
+    const block = Buffer.alloc(5 + length);
+    block[0] = final ? 1 : 0;
+    block.writeUInt16LE(length, 1);
+    block.writeUInt16LE((~length) & 0xffff, 3);
+    buffer.copy(block, 5, offset, offset + length);
+    chunks.push(block);
+    offset += length;
+  }
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(adler32(buffer));
+  chunks.push(checksum);
+  return Buffer.concat(chunks);
 }
 
 function pointInPolygon(x, y, points) {
@@ -149,7 +177,7 @@ function encodePng(size) {
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     pngChunk("IHDR", header),
-    pngChunk("IDAT", zlib.deflateSync(rows, { level: 9 })),
+    pngChunk("IDAT", storedDeflate(rows)),
     pngChunk("IEND", Buffer.alloc(0))
   ]);
 }
