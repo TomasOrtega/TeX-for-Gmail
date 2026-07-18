@@ -1,0 +1,2753 @@
+{
+  "schemaVersion": 1,
+  "sourceResources": {
+    "texLive": {
+      "repository": "https://github.com/TeX-for-Gmail/TeX-Live-Files",
+      "release": "v2019.0.4",
+      "commit": "41bdfeea35d787cb2f314eea4d707bb32bc996ac",
+      "vendorScript": "scripts/vendor-texlive.js"
+    }
+  },
+  "components": [
+    {
+      "component": "BrowserFS",
+      "version": "2.0.0",
+      "license": "MIT and Emscripten MIT/NCSA",
+      "source": "https://github.com/jvilk/BrowserFS",
+      "sourceRevision": "bef1dc0b06021b04f66d90f2795e5cb8d25b7332",
+      "npmPackage": "browserfs@2.0.0",
+      "npmIntegrity": "sha512-3WyiUf04WRZQqJHaPuCNO+1zPb4NOwYXrr4YuMY0pu81R7UoIEmrCiwLoOqyL+uL+CyVfI4M8ugiPjgkPXVzHA==",
+      "provenance": "scripts/vendor-browserfs.js copies the exact npm distribution, license, and package metadata, then deterministically replaces its two dynamic global-scope lookups for extension CSP compatibility.",
+      "lockPaths": [
+        "chrome-extension/resources/scripts/browserfs.min.js"
+      ],
+      "lockTrees": [
+        "chrome-extension/resources/browserfs"
+      ],
+      "files": [
+        {
+          "path": "chrome-extension/resources/browserfs/LICENSE",
+          "size": 6217,
+          "sha256": "3a7e16fe59c38735309c9df4657cda635cfd7a1bf672f5404b7c7ab5cf949d94"
+        },
+        {
+          "path": "chrome-extension/resources/browserfs/package.json",
+          "size": 4823,
+          "sha256": "fcb0f78bbf8c01fe646820d054271e124f936512279b61fb2f6f88375c9c6ddb"
+        },
+        {
+          "path": "chrome-extension/resources/scripts/browserfs.min.js",
+          "size": 247354,
+          "sha256": "cc904bc7a9a304f8b4687255ebcf389fbb3a5fe409c597099eb70ae38fffbf02"
+        }
+      ]
+    },
+    {
+      "component": "MuPDF.js",
+      "version": "1.28.0",
+      "license": "AGPL-3.0-or-later",
+      "source": "https://github.com/ArtifexSoftware/mupdf",
+      "sourceRevision": "205b8cf43551279d1215e88fe2845c5d595bade9",
+      "npmPackage": "mupdf@1.28.0",
+      "npmIntegrity": "sha512-ACUnbpECaQ5JLq04pwd89lS+0IGMest5qL5tb08g9TAR7bDtfqflHEkb2Xm3o4rvC/szguLiV+WEbW9kstj8Sg==",
+      "provenance": "scripts/vendor-mupdf.js copies the runtime, package metadata, and license from the exact npm dependency locked by package-lock.json. The source revision is the official MuPDF 1.28.0 release tag.",
+      "lockTrees": [
+        "chrome-extension/resources/mupdf"
+      ],
+      "files": [
+        {
+          "path": "chrome-extension/resources/mupdf/LICENSE",
+          "size": 34520,
+          "sha256": "57c8ff33c9c0cfc3ef00e650a1cc910d7ee479a8bc509f6c9209a7c2a11399d6"
+        },
+        {
+          "path": "chrome-extension/resources/mupdf/mupdf-wasm.js",
+          "size": 28860,
+          "sha256": "c6c768714b70aa738b2c5102922a7c6f2dab56d5b4cbc9e6d61efc352eb19808"
+        },
+        {
+          "path": "chrome-extension/resources/mupdf/mupdf-wasm.wasm",
+          "size": 10408550,
+          "sha256": "f7d39be2ea7bf8f65ffe1b11f405547d0a5b7e3b94d4c1ef59d16687411bdebf"
+        },
+        {
+          "path": "chrome-extension/resources/mupdf/mupdf.js",
+          "size": 103369,
+          "sha256": "9150b3fd97f63a96f7d5e7b6bcbd4b0a7ad087c725bfffa3272f6a8728ca68a2"
+        },
+        {
+          "path": "chrome-extension/resources/mupdf/package.json",
+          "size": 831,
+          "sha256": "74fb23e174ab2c138e20277b55688c00538e4e60af9a76006b20b34dd9e2dad2"
+        }
+      ]
+    },
+    {
+      "component": "pdfTeX",
+      "version": "1.40.20 / TeX Live 2019",
+      "license": "GPL-2.0-or-later, LGPL-2.1-or-later, and other linked-component terms; inventory incomplete",
+      "source": "https://tug.org/texlive/",
+      "provenance": "The version is embedded in the WASM binary. The current pdftex.bc bytes first appear as wasm/pdftex.bc in repository commit 75ec270cec23774e8e75eeec8aaf747223826b98 and move to their current path in e3f9ae22f51d2cb98c14b166485ad2a4c276bdb1. Embedded LLVM metadata identifies Clang 6.0.1, emscripten-fastcomp-clang commit 98df4be387dde3e3918fa5bbb5fc43e1a0e1daac, emscripten-fastcomp commit 6c7e775325067e33fa60611e619a8b987b6d0c35, Emscripten version strings 1.38.44 and 1.38.31, and include paths from tag 1.39.4. These clues do not identify the exact TeX Live source revision or provide a supported, reproducible build recipe.",
+      "lockPaths": [
+        "chrome-extension/resources/scripts/pdflatex.js",
+        "chrome-extension/resources/wasm/pdflatex.wasm",
+        "wasm/pdflatex/pdftex.bc",
+        "wasm/pdflatex/pdflatex.js",
+        "wasm/pdflatex/pdflatex.wasm"
+      ],
+      "files": [
+        {
+          "path": "chrome-extension/resources/scripts/pdflatex.js",
+          "size": 125271,
+          "sha256": "37dabcb980f7468bf21bcd0bef6d81ad4003da1e7e25d3241254e238d462512a"
+        },
+        {
+          "path": "chrome-extension/resources/wasm/pdflatex.wasm",
+          "size": 2122314,
+          "sha256": "6f45f597bcd7ed81e3d0ad9d7fcfda760ebbbb895c78e2c12b61794c1d738242"
+        },
+        {
+          "path": "wasm/pdflatex/pdflatex.js",
+          "size": 125271,
+          "sha256": "37dabcb980f7468bf21bcd0bef6d81ad4003da1e7e25d3241254e238d462512a"
+        },
+        {
+          "path": "wasm/pdflatex/pdflatex.wasm",
+          "size": 2122314,
+          "sha256": "6f45f597bcd7ed81e3d0ad9d7fcfda760ebbbb895c78e2c12b61794c1d738242"
+        },
+        {
+          "path": "wasm/pdflatex/pdftex.bc",
+          "size": 8601708,
+          "sha256": "1affc5791b900c12eff2ff89a2dd2eca6365324d0db488af6027d161a3c1ca17"
+        }
+      ]
+    },
+    {
+      "component": "TeX Live runtime subset",
+      "version": "2019.0.4",
+      "license": "Mixed TeX Live component licenses; inventory incomplete",
+      "source": "https://github.com/TeX-for-Gmail/TeX-Live-Files",
+      "sourceRevision": "41bdfeea35d787cb2f314eea4d707bb32bc996ac",
+      "provenance": "scripts/vendor-texlive.js checks out the immutable source revision, copies the fixed LaTeX/AMS runtime and required font families, and generates the packaged BrowserFS index. The revision also supplies a prebuilt pdflatex.fmt dated 2020-03-22. Its format-generation recipe and complete source/license inputs are not present; embedded paths identify additional LaTeX, Babel, and hyphenation inputs. This remains a production source and license review blocker.",
+      "lockPaths": [
+        "chrome-extension/resources/data/index.json"
+      ],
+      "lockTrees": [
+        "chrome-extension/resources/texlive"
+      ],
+      "files": [
+        {
+          "path": "chrome-extension/resources/data/index.json",
+          "size": 9773,
+          "sha256": "a3f662453fd8155f5ae54454cd82e220961ef67cefa5223b3255f0976b5f0601"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/LICENSE.CTAN",
+          "size": 2098,
+          "sha256": "380d83c62ec2ae91617b42739699676f23446039f2f88fa092da47e0c49f1eae"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/LICENSE.TL",
+          "size": 5086,
+          "sha256": "37afcc93313836e5dca1be324b6b469c5289a87caab723b93e1aa1730f0e9eb0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-config/ls-R",
+          "size": 80,
+          "sha256": "418d569540155c83d3e01fb88cf8ecbf5870deedc3844f86d38df2f9b4d4f5b2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/map/fontname/texfonts.map",
+          "size": 3332,
+          "sha256": "289d05d37bb81a00180a31050a46dcbbc5108b703e85ebf5427d9841dbcd87f9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy5.tfm",
+          "size": 1120,
+          "sha256": "5b9beb5bfecf9dd9d1518e35882ea73f272b0e3e12cd5b89d3ec3167947414e4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy6.tfm",
+          "size": 1124,
+          "sha256": "adfe5cd6d96609eee450dfb2bd3c63b57c635c2583ad3e739510a3eab1a08aa9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy7.tfm",
+          "size": 1120,
+          "sha256": "2e60a0188012d87a12fe619279439710f33bc28fe60d686c974ff1cf334de558"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy8.tfm",
+          "size": 1120,
+          "sha256": "9566eeab4621d895d1fa22221fb62f7b6ccffa44845078fa2037b465ce67e06b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmbsy9.tfm",
+          "size": 1112,
+          "sha256": "9337768de9c16f039408050117b34b1b857c22268be1f0c8e0cecaa65b4c722c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmcsc8.tfm",
+          "size": 1304,
+          "sha256": "764265c66d15e6b365b22ecc7628fd571200a4faf7643cffc09c362a5713a3d5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmcsc9.tfm",
+          "size": 1300,
+          "sha256": "fa7d0f8cd3e098d9ab9a0a1c0739b801cbb227d3580636592021200da4cd8b35"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm",
+          "size": 1004,
+          "sha256": "373172fe340e4aede5129b89d65f576bfb1fe6932bd55c38f60bcaa84f3d1188"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm",
+          "size": 988,
+          "sha256": "3f56ab22f7fc6a015813976c6c6cc2fd55736bbaec4958a4562e10719fa18062"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex9.tfm",
+          "size": 996,
+          "sha256": "70ca3442c95cd6cf3437ab7c2d0e4b9797531eacfe400dccc61d04bda288bae0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmmib5.tfm",
+          "size": 1496,
+          "sha256": "bfb47a1a12442fd702bcd8be94a08492a9cd3263b75c23feb14f05d68c6ab324"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmmib6.tfm",
+          "size": 1516,
+          "sha256": "abaf04ee48211209933d554a5ceb50b6e74699d167d533e5d46b28f20fd7b7ae"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmmib7.tfm",
+          "size": 1508,
+          "sha256": "124bf319cc661280955868642212f450b0bedd90eaeecc3b359a598a4fe35649"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmmib8.tfm",
+          "size": 1528,
+          "sha256": "e9fcf027b39859a8e6004061d2bf700ecec237cfc9f7e88bc15e5d2e99dc4fbf"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmmib9.tfm",
+          "size": 1528,
+          "sha256": "84c01086ad78e02bcaea856054295be1a0896b148a05ef1476aa6f7da240da86"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb10.tfm",
+          "size": 1588,
+          "sha256": "01cb39d0f101e1e5381be0169b83ec4b167afcecdca0bef90613e433c0214042"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb5.tfm",
+          "size": 1600,
+          "sha256": "7f04edf5037017743a30fb20bbdb91391fe96200831eef5e2798e0e99996fbf7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb6.tfm",
+          "size": 1600,
+          "sha256": "52f0c33a84e2941fe9ab09726682100db3a776e80c807bd7085a841e652b2a95"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb7.tfm",
+          "size": 1600,
+          "sha256": "f97aff01513007f3a02d617f7065fda6b9493fd9447eb0e37d8d8cdc2434f7e3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb8.tfm",
+          "size": 1596,
+          "sha256": "653b3514b10f32a07bd55d7928ee416fd0d9a389de0cd0a45dba6745ad0da66b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyb9.tfm",
+          "size": 1596,
+          "sha256": "5709b18b5b50504ee235c838dc5dc077088bd9b2c5a8d91b08ad1a4648b7808f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi10.tfm",
+          "size": 1652,
+          "sha256": "ec75e91cdb297dcdd4be05c1007f416c9af450adb24a01a482091bbb5f63168b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi5.tfm",
+          "size": 1676,
+          "sha256": "db7a298c7ba56ee24608ca362688bd8af264e8c4f58b76e90f639994df7e512f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi6.tfm",
+          "size": 1656,
+          "sha256": "7823eacc84258a89e62d23660381895c610af9b7561b1213b04f66fa0500a97f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi7.tfm",
+          "size": 1668,
+          "sha256": "7971ea761f09ff73f0d0a3e4c8d612f34851d692429d090574959a76d3d9a7ca"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi8.tfm",
+          "size": 1672,
+          "sha256": "8a8008f9328a95bbda064e7d1409ef22d2ded54d777856222b95fa3aed4f6b6a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyi9.tfm",
+          "size": 1648,
+          "sha256": "12cb3b48ca333cc7fa9009c2da529f4b0a3b42f492e2bdbc1969bcf55e59080f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr10.tfm",
+          "size": 1560,
+          "sha256": "a9a8b91f963e5bdbdd212c6dc9bab0fb19858b8b385e9c63843c2f877513dfc9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr5.tfm",
+          "size": 1556,
+          "sha256": "bf65949b899382962219850e52695e096ec0b9006111923d9a5373b682fc8093"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr6.tfm",
+          "size": 1564,
+          "sha256": "ea41179407891381a6a274545aa6216d3722c111b6e152b22d065aa44773ff07"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr7.tfm",
+          "size": 1556,
+          "sha256": "9bf10e08d7237b84c8b5a85daffa5276d8534e8a5030cf25d7eea1860925c979"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr8.tfm",
+          "size": 1560,
+          "sha256": "3b566d613e1719260a8c168fd67d3f96d4643d840811fb2e79ac1ac0d76b95f5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyr9.tfm",
+          "size": 1560,
+          "sha256": "c358796d790f429d8c433be2439e20b63ccd6e836f0c8dc3c3097a82d9f287a0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncysc10.tfm",
+          "size": 1524,
+          "sha256": "d609ce2e3b924b5a6417b14b966c43186dc80840ce977015b0930b71233084aa"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyss10.tfm",
+          "size": 1580,
+          "sha256": "da79766c0f9c1c93f08899e9f4e1c6f763d01a37b823b5f78ce38c2f59c7117c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyss8.tfm",
+          "size": 1564,
+          "sha256": "dfca8c80eb227c5c54a817d8d93674f0c29a9273db07be9cb9992c55df2160b9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/cyrillic/wncyss9.tfm",
+          "size": 1596,
+          "sha256": "5f7d5e980a56009249a76459cb236860803e35c1567a7be6eabd67b77056efd5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/dummy/dummy.tfm",
+          "size": 200,
+          "sha256": "f174a48528f8dfb4d8e8b49ab68bbe959159497fea9a42442088b9580d1b246e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/euex10.tfm",
+          "size": 808,
+          "sha256": "3ac578e6abbd872de53299781b17c98e726da7bb3d93c926ad7bb20fee0bcaa2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/euex7.tfm",
+          "size": 808,
+          "sha256": "984c4a93031569d96420666cbabd74a45e7e9cfc1d88251e1b0835015335b2a4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/euex8.tfm",
+          "size": 808,
+          "sha256": "6945ce2fd5f1a64fbd9f5a6f8c203601cfe8d626247959b71e390a6eeaf2247a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/euex9.tfm",
+          "size": 812,
+          "sha256": "32b9a9987bf0b85a95d3b065c5b068df29d520f7d422e312eebd79f138efa3e8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb10.tfm",
+          "size": 1028,
+          "sha256": "34fee4a59276c8d02f1a0e84c4ca50ba7468a16c73ed24e56d723d5e42dc3d2a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb5.tfm",
+          "size": 1028,
+          "sha256": "48d9d739ed6cf18be408b7f10d79055fc9e068b82d869f75dc10f1b64f3bee4e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb6.tfm",
+          "size": 1028,
+          "sha256": "26ffc0017cb1631ca6f46e5b6a0b142c50c7f048329b0ce0dba81518798545c9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb7.tfm",
+          "size": 1028,
+          "sha256": "92b5369b912a0111c7fc0aeb6c4d8004f59937b654310a42deadb13928b7a4ae"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb8.tfm",
+          "size": 1028,
+          "sha256": "b0e1567ab0cf10621b94ac6a68fb93388103ec00594afc7632636129e0d810d5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufb9.tfm",
+          "size": 1028,
+          "sha256": "d278f10984541e2f945620801944e86673df8591acb89d22aa1b596cf3f331f9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm10.tfm",
+          "size": 1040,
+          "sha256": "f0b7018ade501b4647c116a9ed1df10612cf8c173d0657ea17c5f1f6003fd1a1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm5.tfm",
+          "size": 1040,
+          "sha256": "a7293dbf5c5c9d6dcbe75405f1a628788e0bc23b0a00e7b289d21eae163f7285"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm6.tfm",
+          "size": 1040,
+          "sha256": "01ecb02220b81039a8e3e4d720e861a4de925a24abe8ff324ce5b33729c7732c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm7.tfm",
+          "size": 1040,
+          "sha256": "23cdb6f111156554ea02f45f63c38a31e8e591d497b3810e7c71304f866dde74"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm8.tfm",
+          "size": 1040,
+          "sha256": "6ccdb04c9c7ef279d8b28b4d1de799327cedeed921cafcb1d2349087c5ce1f61"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eufm9.tfm",
+          "size": 1040,
+          "sha256": "403fbeff814740e2d373622dce9e2e33fb7d02869439a5ced04b878e17c5ee94"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb10.tfm",
+          "size": 1208,
+          "sha256": "5af6645bc53dc311541269b48565c10582dcdf25213b5ab0fae06a85071c8922"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb5.tfm",
+          "size": 1208,
+          "sha256": "e5903918fee6bd79fe28aad9b12e1a3825626d7bbe295602fc8b5a330ade6958"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb6.tfm",
+          "size": 1208,
+          "sha256": "05b964defaaacb3aefa9be6224ee26a6923660bc1cce155bc9c3201d9bb995b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb7.tfm",
+          "size": 1208,
+          "sha256": "9dedb970e9b157dd18ec9a0d4b2c0c092eace85e1b3b2b10f691871ff8f20b9c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb8.tfm",
+          "size": 1208,
+          "sha256": "9c5c9d1a336b035f587e04ff9f44d0dffe532630d5f3674f48d9d7059aae113d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurb9.tfm",
+          "size": 1208,
+          "sha256": "cfc97c6c057c35d7057fa0dc75612c7c1173eefcfe0e2d1c7390373d73ae6536"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm10.tfm",
+          "size": 1228,
+          "sha256": "09c953e1c6ace47767f4ce1d2f8603e26a009dc6b6f55c478389ca5a55370069"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm5.tfm",
+          "size": 1228,
+          "sha256": "16a6c3e40868f417c87d4ee14a5023ad2c9529d199d30e1a05001ba13703d3c7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm6.tfm",
+          "size": 1228,
+          "sha256": "5caedee371a2f8a9ec8c4a0714fa914e8d0219fa08be35d5e27b8eaa9eae683b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm7.tfm",
+          "size": 1228,
+          "sha256": "5e061057b9e626cfa166c32dc1b7285a59801c9b145579a54ee95d689e78f822"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm8.tfm",
+          "size": 1228,
+          "sha256": "39062397f1186fe281d5a325b08de23b69b06ed3e8a9d8c449d917bc86a2534a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eurm9.tfm",
+          "size": 1228,
+          "sha256": "6a9eab2bcb502deca6c316c7fa913ccbd9c647164c7f26ae3a8945c3e0ed09c0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb10.tfm",
+          "size": 884,
+          "sha256": "717fc6f28faa00841c1d4732ba5e158d622611c939893e8a42e1adf8dc1c1154"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb5.tfm",
+          "size": 884,
+          "sha256": "4b4401330f043aa1df7a04ff132f2780db51e6aa1428dafbe632e0e5884168f7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb6.tfm",
+          "size": 884,
+          "sha256": "423671fb1790db1e8ecb9850429ae1e70390aba8aef2068c456241988216333d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb7.tfm",
+          "size": 884,
+          "sha256": "73acd300beec74a6dfcd9103345616f02dde89b31908b4a578e85fa8f27b3630"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb8.tfm",
+          "size": 884,
+          "sha256": "51d4d4fdad022653988e3c5ae11fa5cc8c013049ef5c9f145c5eb122e899a51b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusb9.tfm",
+          "size": 884,
+          "sha256": "a52d5e2c9354639db91cecb8dbcf3ce4e63005ed46dac78202a6b82620fe334e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm10.tfm",
+          "size": 896,
+          "sha256": "b71bec8be8e1cbcd96a6bf2167d25bcb297e4e05e301957832b77caa2bfdb0df"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm5.tfm",
+          "size": 896,
+          "sha256": "bf690ad7aac52e85a68dd2ce3d1b7162f497796f48688bea3a474a8936870e1f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm6.tfm",
+          "size": 896,
+          "sha256": "223a03b26e9d6c818e5e09e8e57ee6312849bd3c86f40395194ae926aa2252b0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm7.tfm",
+          "size": 896,
+          "sha256": "bcd143f77b1a2c7fd03e49d0f2ab96c0b484f10cb5943db48279f51b98fc364b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm8.tfm",
+          "size": 896,
+          "sha256": "1c1ab19c646fd0f5a0ca011f17ea5fab998523ab341c5cee2ccd7229ee783c59"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/euler/eusm9.tfm",
+          "size": 896,
+          "sha256": "010eaaab05d1c79ee9a7836d1606ff9f604800c6b8a586a8b5ceaf166502a6df"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm",
+          "size": 916,
+          "sha256": "3b54bde5cb0e0bd071eea7bc702ed3a1a284f786779ef8e75b06eba4104bb9f2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam5.tfm",
+          "size": 924,
+          "sha256": "c800d1dfd533040219fcc06d52e0e00c2a20fb9b0039fe9f58ccec53fd003a9f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam6.tfm",
+          "size": 928,
+          "sha256": "0c76e8497173b5dae9a5d4b7eedfcbc1580772d756d40d56c2da223856155969"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam7.tfm",
+          "size": 928,
+          "sha256": "719d100c110fa1cfae9ad0b63e6c21753f4980f925fa516c1a04961e206f69d5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam8.tfm",
+          "size": 920,
+          "sha256": "605fc161cc4a4cce2300697d1c8d9a6d19b983e34277ee0749fd7befc66634e8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam9.tfm",
+          "size": 920,
+          "sha256": "f3d6b159ecf50403b4371e1da8a6a52ca8a6175d163c4175951320de453fedec"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm10.tfm",
+          "size": 908,
+          "sha256": "d9f5f519ec718e9dbccb8527c1f5d3b4a008dfb946377f97f71611b385d3d010"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5.tfm",
+          "size": 940,
+          "sha256": "9e0909a297a3097e50960158d324006ddd5302db665400fa1fdf966df14e1a17"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm6.tfm",
+          "size": 940,
+          "sha256": "33d2ef04ae77cd8b3342e17350ef07971e21201ea01d1be8066f67d8f6dc2195"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm7.tfm",
+          "size": 940,
+          "sha256": "361b5530a4b410c6274e9330c11e993843c62e394323aeaa6e0aee61e8042444"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm8.tfm",
+          "size": 940,
+          "sha256": "103e0e61462052d5c06aa1ecb96bc3ccef048471bdaa1a3e95bbd68bc4a379b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm9.tfm",
+          "size": 940,
+          "sha256": "dc7174ebd0d08486f26bd97a994ad317b7259b0a591064ca1c297b592a75bf09"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmb10.tfm",
+          "size": 1336,
+          "sha256": "55cbc994b903a1c77150b9e8be4c12d745758aff76ac4f9dd7db5c5e00bc8aca"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbsy10.tfm",
+          "size": 1116,
+          "sha256": "b5a0bf8a30db124f56f4e48237b510be6b1a78886da1540f2394ddfaf3186c25"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx10.tfm",
+          "size": 1328,
+          "sha256": "ae296e8e41b2b0f73e9a17fdc42c743b9ddcc58d23c30acaa3411206f7824780"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm",
+          "size": 1324,
+          "sha256": "0eb2f13840155007c2d3c59b074322a3aa7358b9643aa314f3146468ae7f0806"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx5.tfm",
+          "size": 1332,
+          "sha256": "a746151d8e3a521965bbfae2666e1528374a514375daa7d620e9b89ebbbfb0ae"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx6.tfm",
+          "size": 1344,
+          "sha256": "38ded79d7cce07fa28921f37f6b88e67bd86951a3e5af709c219d63454786ce1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx7.tfm",
+          "size": 1336,
+          "sha256": "e7b284f0ee98b7773be9b57ca652b4bb14391370509a424b5b62b06b5cae86e4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx8.tfm",
+          "size": 1332,
+          "sha256": "6dab44c885b7cbf567771d9cfa565f3df34d0e8124132b9b6f9fdc496a1c2eda"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbx9.tfm",
+          "size": 1328,
+          "sha256": "9fb9cbe254c828bc6bdcc0ca66f81b6cb9b713edf0ef1b7fa67e231920112499"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbxsl10.tfm",
+          "size": 1532,
+          "sha256": "4a2dbf075487bcdb3b081926f8e5a03520b16a2e1af643e1e0fc36d7f344fb1e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmbxti10.tfm",
+          "size": 1532,
+          "sha256": "2ba218c04e402c9d013cf5e36ffffe6ae420c1f2192291606405ef9f3f86df70"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmcsc10.tfm",
+          "size": 1300,
+          "sha256": "0d691f70f365e55b83096764fe0c65338842d704bd5b979ed0c6882f9e17ce0d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmdunh10.tfm",
+          "size": 1296,
+          "sha256": "a94093bba5082a6e63fc95dd9bf4d10a8152a2a5f9e3913ab04dd6f60974d843"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmex10.tfm",
+          "size": 992,
+          "sha256": "0890bccea1dd4d27f001ac30e86c63af35bc803e0557c35aafb1903c8d208e92"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmff10.tfm",
+          "size": 1324,
+          "sha256": "d7c17659aa5ddd781518ea67ba3e569be634fd2c156e76899d5c196bbf3e0e5f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmfi10.tfm",
+          "size": 1424,
+          "sha256": "ffd5979983f29ec2c5d5bdcdb3d2cc2f956f7e2cd891a4a3b36269c2c52ab063"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmfib8.tfm",
+          "size": 1280,
+          "sha256": "49253478733658d6926b0d755ef24c1c66f382fe95862c9466fc249c014896ed"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cminch.tfm",
+          "size": 492,
+          "sha256": "5d7afb37cd4737e2a88a5c50ed820fa3949df058087cd07e5bf4812011d07f7d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmitt10.tfm",
+          "size": 768,
+          "sha256": "bef521b29b7f2cd162767471db15078e30fd2df5a4bb1e1293a1a4c081ed3f6a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi10.tfm",
+          "size": 1528,
+          "sha256": "e442c5487f84df70218ff37f775c87060856f5b6e04c011b6cadbbadfcf46645"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi12.tfm",
+          "size": 1524,
+          "sha256": "79563547084d85388e6909888f9fa7f5cad33bdda44ca6b25b362e1d301db539"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi5.tfm",
+          "size": 1508,
+          "sha256": "8839e40838381a0a3c976bdd5becf72afd60bde5a965c3d9b985c3479c6cf75e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi6.tfm",
+          "size": 1512,
+          "sha256": "ab6ecb4aaba9ca1b4259b1d1f64309a785bbaeb09183fd79a066b7764a448a28"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi7.tfm",
+          "size": 1528,
+          "sha256": "ce55681703aae565f17286d800ea9780223132589bdbaeda1751b869aba26a38"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi8.tfm",
+          "size": 1520,
+          "sha256": "65af8c1e162a952cab8e93c834fcf43ce09b508e6c16e512ebb673cd850b0d41"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmi9.tfm",
+          "size": 1524,
+          "sha256": "20672649a2f07eef8fe07ccb42eeb731023e48f2e0797ecef57c0887da46c032"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmmib10.tfm",
+          "size": 1524,
+          "sha256": "4465d20955917959c68d0254647e5caba1f38c4516a1fd212eab2da9b8645874"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr10.tfm",
+          "size": 1296,
+          "sha256": "87f2d8981927644cbecaf3d639e96e348ea4e7be49d8804468bd8ba9ff3f5244"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr12.tfm",
+          "size": 1288,
+          "sha256": "1ce8af37ed38e93940829d3540e494eaaddc5201758d036b9074467e70a738dc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr17.tfm",
+          "size": 1292,
+          "sha256": "86b6e8a52aae6ad1655e32099e12bd2904b158aba4c8afb74143266d2d9cd18f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr5.tfm",
+          "size": 1220,
+          "sha256": "581be818f67bd11a1792d05e129abe3ea30c5cbdfce3bed8da7c5fb50f5ba95b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr6.tfm",
+          "size": 1300,
+          "sha256": "106afa9172f0c00e58b9f5cbc72b302a18aaeeaddf50caca145af9cc0b81afd2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr7.tfm",
+          "size": 1300,
+          "sha256": "28f9f4d237bdae4babef4a59d90f17686a09d6f9df0b2c3c23b2ba15f20eee82"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr8.tfm",
+          "size": 1292,
+          "sha256": "4c5ae243ac0aa254e7ec7f0602cc2a4351e5011ff0cb6dc150a5f6de19585de6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmr9.tfm",
+          "size": 1292,
+          "sha256": "2ffa73e8446c1d46c3509a0f65ff97d4d09de46f48e1ce578a1004498b67dba9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsl10.tfm",
+          "size": 1508,
+          "sha256": "dcbfc25c5aac16dc2b820e089a00aedef20a1af6d8d3c2efa54f6f17a985d33f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsl12.tfm",
+          "size": 1504,
+          "sha256": "0bfef4919b1be6619d3e6892ea75066f4aa372b82d6164ebd06ef6c5b6281278"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsl8.tfm",
+          "size": 1504,
+          "sha256": "581080f4ebd96f58b4b6f774ea2882f5e83fef7c932647a7c957f7e8db1f7823"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsl9.tfm",
+          "size": 1504,
+          "sha256": "bb0f9deb6852caed902cb04bfc8e8333345a37946bd0b6bd56d11848e729d3ca"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsltt10.tfm",
+          "size": 772,
+          "sha256": "c093023e8958e30678808a843f4f4248f5ab609f8994182fded845590fe19cc3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmss10.tfm",
+          "size": 1316,
+          "sha256": "431472f34665b6243a32936215f2e17d1f124cdf8513e86e2bedc4c3de3f980b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmss12.tfm",
+          "size": 1324,
+          "sha256": "38ba636afc0e32d07c340b9ad747c33c6d4a4256ccb9e42ae9f7d3df11b3fe1a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmss17.tfm",
+          "size": 1320,
+          "sha256": "a88f81798171b3582557826302ad7233e676949e17182d3dc84ea65bdf58e631"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmss8.tfm",
+          "size": 1296,
+          "sha256": "25650d37e11bee41e03dc4757a1b6f1a64f27a53c664aa618d1a8ded54d96ed5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmss9.tfm",
+          "size": 1320,
+          "sha256": "904af036b1e2e1d1375cf763959ef9517a2fc3e24ac94dbb6290574cfafc0b50"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssbx10.tfm",
+          "size": 1272,
+          "sha256": "59fcefaa9436cb00b1579a549b4a16b38606bb1b6138743d05ea35a74f168f54"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssdc10.tfm",
+          "size": 1328,
+          "sha256": "1a0a6b7410c4c9fcc683cedcb9282428c98bd6aa54902e84ef6e71913f8aaaa2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssi10.tfm",
+          "size": 1520,
+          "sha256": "9faee1d46e86de1eb7a8f7a53522d15fa8f06e75d292d8e6989dfcd252b322c7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssi12.tfm",
+          "size": 1532,
+          "sha256": "e8ea523bf347a1e932fa15a7d67af8bbc3720f4f59566ef9bf4270b9c26518da"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssi17.tfm",
+          "size": 1528,
+          "sha256": "469b3e0bba8808729745f6221efb2bd1057814d24ecccc79ba67fdfad4ec2cd7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssi8.tfm",
+          "size": 1500,
+          "sha256": "79ce614e9edf079e9656dd8103402fc2dc745c77846a6c0a921342b8ad6c33e3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssi9.tfm",
+          "size": 1524,
+          "sha256": "c7e5764b1d1f637e733efdff121f7c88957a71844a3c4f5d4563f2b8c5d6bab2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssq8.tfm",
+          "size": 1304,
+          "sha256": "a813de9f318949969010f4a363b2c3076e5cefa4436e779404453b2c34435504"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmssqi8.tfm",
+          "size": 1496,
+          "sha256": "78673efe5657b8a293e160c0ac88834778cf9a5ed1922a0bfcca3f5562c17f88"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy10.tfm",
+          "size": 1124,
+          "sha256": "0ca13d421ac7133271aed7c935099ecf3d1d08ac9e15f81acb34a16564ab8a46"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy5.tfm",
+          "size": 1112,
+          "sha256": "6b7dc18cba9ca8996d7b146f1ed78d9227577b26248083310fec227692198ca5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy6.tfm",
+          "size": 1116,
+          "sha256": "137eb9f38f661c66309614066a7b5d63d8969d33aba0c9efee9f844a4ce65b50"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy7.tfm",
+          "size": 1120,
+          "sha256": "4f59bbf683e947c807158641621982dc83f55fec042fea7963d8ce9f9da98256"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy8.tfm",
+          "size": 1120,
+          "sha256": "84c37f07ca360c41ad0a0fba7387d279d72457c69bdae03653208c683d8de6bc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmsy9.tfm",
+          "size": 1116,
+          "sha256": "b57c5c42a7991a004ee1b40b340d7bd12cc75ab0a6f7daf7a207827504f91712"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtcsc10.tfm",
+          "size": 776,
+          "sha256": "15d384d3e1b9edbe61fa59f7778fa52328507cfed3b84ef1133971eb23534a8f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtex10.tfm",
+          "size": 768,
+          "sha256": "b3cf3073fc0365ed335305b04579068059b8de860875bee514509764243f28d9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtex8.tfm",
+          "size": 768,
+          "sha256": "fe5347dbbdc0e43b6f6a4b746abbda5f40e504916f14cd98d5572df9c8dd9f3c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtex9.tfm",
+          "size": 764,
+          "sha256": "c7cd0eee8b1087c3afae677d6f9ce5483bdfa26ec571b706e999fdde0677ac3b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmti10.tfm",
+          "size": 1480,
+          "sha256": "46a66e937f809c4fbe317947b583a14b408aca41ecb835eca3be46391190432a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmti12.tfm",
+          "size": 1484,
+          "sha256": "92d92985d932893a426546c1e59b69107423785857f6f29aa866be0aa8970883"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmti7.tfm",
+          "size": 1492,
+          "sha256": "78921699d46fd39b25e2e3ea08b96d9c3ad9c858a6ad2cc1aa60204a36ce88f0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmti8.tfm",
+          "size": 1504,
+          "sha256": "7a212edaa5bbb6898b6196e32a5753811dc3295a18b9bcd9c727c23ce0c21a4e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmti9.tfm",
+          "size": 1476,
+          "sha256": "bae91797b96e40fbeb97e2ea3184070e7cf707b72422c7c107edf1d1d5a10abb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtt10.tfm",
+          "size": 768,
+          "sha256": "11f3331c958b696fd484fe45c28285622617a2593d7a34511a1d6b279e1578a2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtt12.tfm",
+          "size": 772,
+          "sha256": "156417e26b9a51c7e052d5fdb3db7b25f10d4fa0d094180ae7834894189a0a0b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtt8.tfm",
+          "size": 768,
+          "sha256": "62f6142387fe8d4be3ba2d46034e76fd6c3fc1d22ab44663a4eaa3f42b97039e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmtt9.tfm",
+          "size": 764,
+          "sha256": "2989dbdeed1533cdeba5dcd0edee59c4509b5c934b3db8847de78d8c94a9966d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmu10.tfm",
+          "size": 1276,
+          "sha256": "7896645187499d599c330a8cbebc4ba1e21fa88b4ad46a86ef3db53cfa39b6f7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/tfm/public/cm/cmvtt10.tfm",
+          "size": 1248,
+          "sha256": "1ef141c7fcac180ec4293f4f43c34089bb09f4d794663bf122f8f9a089fd23b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmb10.pfb",
+          "size": 31983,
+          "sha256": "c0e21c2df152dd0cf922626f4fced88fdb8cf3dddf856f4464e447af98b5b902"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmb10.pfm",
+          "size": 1304,
+          "sha256": "7319efb2277da9d8b5c8467dbd2fe22c57d22bf7e553aa7a7d2c17ecccd49f87"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbsy10.pfb",
+          "size": 34793,
+          "sha256": "dd42853a466c1c38ca940375ce49bb18ea336299344a80dab4fa0faf145d19db"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbsy10.pfm",
+          "size": 662,
+          "sha256": "7df849668f3754fd72178a355d6b7c548c2efc75d3fbf22bae1e558dfca9f64c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb",
+          "size": 34811,
+          "sha256": "ca41102968b817bf6e8b22fd6de205ca23bf5088218511cce0c8129e1577cb70"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfm",
+          "size": 1305,
+          "sha256": "8a2c25e2dc68b232e49dc8c40c81937e193db92ae1dc38e3f12f32b7ad8de76e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb",
+          "size": 32080,
+          "sha256": "c838238f31d86a9f198873dfaf501601a4fc966845b9c59e7dc251c4e85d1f1f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfm",
+          "size": 1305,
+          "sha256": "cefff89bdc52b533c7786b57cfa691e2b6d9be5f6d4516dd31b3b42141578a6e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx5.pfb",
+          "size": 32034,
+          "sha256": "4e99bb2f3ebe368073de2685562f5adf7f43358de406f0d2b4b601ef5f7a566c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx5.pfm",
+          "size": 1304,
+          "sha256": "09c8b7e0a9d82e04b51fc92a1237b4cebb6d9271db2df97726721bf227e3a577"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx6.pfb",
+          "size": 32378,
+          "sha256": "1ceb3ea37367394e911a94e4d4b7d5ab3dcefcf19c0c607568951c57385ee394"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx6.pfm",
+          "size": 1304,
+          "sha256": "a0a9a2c618d95815dabc2cc704c3b1540d3c0c7bf280ffcedcb274bfb4742c2f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb",
+          "size": 32007,
+          "sha256": "5e6cd2a9ac9933dd764c41fcfc5097bf1cb3bf1f697438eb4c344b9510630974"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfm",
+          "size": 1304,
+          "sha256": "69bba2d12ab36f12e196ccd643a09474bf291027079139b0292dcf2ea4df8e7c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb",
+          "size": 32166,
+          "sha256": "fe99cd3dcadd182a24b86e593e56d2e900c992311218c43779f858ed6e1c3b31"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfm",
+          "size": 1304,
+          "sha256": "789b7634b1e4ad3f51a869962ace28160ecc7194d523988844ab9942a575316f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfb",
+          "size": 32298,
+          "sha256": "2636ee910f5f5e18a4aa40eee33d1097d91b2d9ac296e8b817b07c8ea2f0e99b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfm",
+          "size": 1304,
+          "sha256": "eb832f05e49ab0a20cdea66734aabf3c2e681d9bb072b1ef2520dcbe3923dbd0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxsl10.pfb",
+          "size": 33268,
+          "sha256": "cee22864c667c9e06b2b0155a5bd792bbdbaf26d2fd777013caa9afb84f65196"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxsl10.pfm",
+          "size": 1307,
+          "sha256": "4fa93d4c05cc7280aa3db0d27fea2d9e146e0174e038b61a768f90fdb3911927"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxti10.pfb",
+          "size": 36554,
+          "sha256": "ee8b854bae6ffd48b5d935ca5f19804faf7b78ac5f83cd4a6efd7da7c4f6c757"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxti10.pfm",
+          "size": 1303,
+          "sha256": "0178312afb72db1b40227d70dd6aeecfffdb92a9b1068104d512a107c536dcab"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmcsc10.pfb",
+          "size": 32001,
+          "sha256": "06c64598f2ff53539677835e26630083d32abd5258d7e4fa029d742ba213d2f5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmcsc10.pfm",
+          "size": 1314,
+          "sha256": "13fbc3d29b42681eea12a518c8a2a42318541eab7a19c8f9332156856464ad98"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmdunh10.pfb",
+          "size": 33089,
+          "sha256": "b0061b33db8ec21e8b9c720343faf876cce080555cfcc69551a4cb3e8dd1ea37"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmdunh10.pfm",
+          "size": 1307,
+          "sha256": "0e7cd4ff23af49718974d477d32091c74dbb016fef6eb00bcd74b1fcbd545679"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb",
+          "size": 30251,
+          "sha256": "791b31aa1db8608d0144b3a40fc0fe53383a60f6b00d0e8fd9f06ac4a11df8cb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfm",
+          "size": 671,
+          "sha256": "7bbd432bc0d6147d1d8edd4d6d87d9e0ba5d91d14c3f9049b34b99417b4953df"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmff10.pfb",
+          "size": 33987,
+          "sha256": "715d8b9fda1550b368583bb25cd1593d611ec95a67c53020a117b612cbb1a1e9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmff10.pfm",
+          "size": 1305,
+          "sha256": "3e7d120a592d3515a570d8953ea989c7f9bf950a73a42c6dec28dcef28548d56"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmfi10.pfb",
+          "size": 34247,
+          "sha256": "401a372cff0b354afadc5674b8b6836da7c42ec6e8b5f875cba1bfa51676c2c4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmfi10.pfm",
+          "size": 1301,
+          "sha256": "b9e7dd5eb3cdcd15bf484a6f55f16dc76cfd2be283c293f9c21a797656113c2f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmfib8.pfb",
+          "size": 32945,
+          "sha256": "584b0ea7ae22fdd9a2ffc524ec7cac08ac83d3fa6c49bec27db76bfbbcda72b3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmfib8.pfm",
+          "size": 1305,
+          "sha256": "eb1a5e418f10db288079ce74f11768450a1a0e39d75dbacc2aadc8d2497a6b02"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cminch.pfb",
+          "size": 8797,
+          "sha256": "a56a8e5af93dada659d80eef4a06a170e0617f9016f86fa709e94e07484fc11c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cminch.pfm",
+          "size": 553,
+          "sha256": "84488b0b4703684f3d2c36fa56151e5c964d5eb3daddd41d3a6383c8dc0b2312"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmitt10.pfb",
+          "size": 26057,
+          "sha256": "3f2478a72dd208e15491869d806694854d4f700de103363f398a32043b761087"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmitt10.pfm",
+          "size": 580,
+          "sha256": "cc16aee3fa5272ff1a2e652d8aa233c4c7311ec7292e61ef32c02c32bdd7c5bc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb",
+          "size": 36299,
+          "sha256": "e3661061e8aa474d6de5ffa916edceb0e3d8b998862018c147f0357fce00bcd7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfm",
+          "size": 1213,
+          "sha256": "eba4144ba7ea53c6e632b5abe98aac49c8c9dc033c73e9d671e7eab9ff168e25"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb",
+          "size": 36741,
+          "sha256": "80fa6aa5f49d52e1f7e5120d053b32d463cd0392a68588ef17c0d1523fba7786"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfm",
+          "size": 1213,
+          "sha256": "7a9f3238d766941fef9aaa9e85311b6b150571b257ed8eeec1086b210992550a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb",
+          "size": 37912,
+          "sha256": "35048e58e53f4aa53025069c1d0de33a16d8d4c111bfa329669e6456ec0a967b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfm",
+          "size": 1212,
+          "sha256": "6eaf2630dc55bbe5675dee81854526fc64f227e82ace38214a8be8554eaeb8ee"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb",
+          "size": 37166,
+          "sha256": "c31dbaffb861162eadf3a7210bdf271b0dda577841aed4c0572069b0d52662b6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfm",
+          "size": 1212,
+          "sha256": "979cbbb9c5aa22b8f06acdb48399795a2f646fc457349b701df852373ded9183"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb",
+          "size": 36281,
+          "sha256": "5b293a581ddb937b02559c3ce1a60184cc434295533204a2cd3864a6ad8a1f53"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfm",
+          "size": 1212,
+          "sha256": "8fa450351b9e2bd18737342e851a21a93ca7c5ec093efb9290e5a2f237337479"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb",
+          "size": 35469,
+          "sha256": "f396f52d9ed3498c15aa7e694baef74c0a11119624fcd6db66dad4ac76972cb0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfm",
+          "size": 1212,
+          "sha256": "122b49c336cfeebedea848ef7561c515102e2a6466f71a80108dd085d89c0080"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb",
+          "size": 36094,
+          "sha256": "c7d9ebe6b8313e0eeee8f9ed4d4e7069c74cfa9d9b64295f0f487e4662281a62"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfm",
+          "size": 1212,
+          "sha256": "812321d2637d3904d199f192210b76b0cdfe08149b006a3f94cb48dcc7f15a53"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb",
+          "size": 36912,
+          "sha256": "6cecc91b2c53569dc3c8ce12211e2252e80eb5d8709f1f1ddae67cb31c96f6a4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfm",
+          "size": 1214,
+          "sha256": "a831a8b7330441aca0392b33813736cc80aca285892257c74086446e18517ec7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb",
+          "size": 35752,
+          "sha256": "fdcede8794018df5f2b58f0905fb20a2b418ed8f67b73ee12445855dfbe5b1be"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfm",
+          "size": 1304,
+          "sha256": "f953f9b5faebd47ca1422fcab7013f1c3f82e7c472381902befa2a6c98d6c2fe"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb",
+          "size": 32722,
+          "sha256": "9b58bfa828b9553b7c8331cf26c45443b836f8aab62e820b40a5b65c8531dd42"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfm",
+          "size": 1304,
+          "sha256": "37cdf04486e9d1d2a50e7722ad9cc50ff8f61aa1de4d91e58cf7941dea0efd00"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb",
+          "size": 32362,
+          "sha256": "465827b4702e12f7deea159c8084753ffc27998963de516e490bd7bd5bed41dd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfm",
+          "size": 1304,
+          "sha256": "51843c703748848c297a3bede103f66f7f2400db5c117f083515f91bb1114881"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb",
+          "size": 31809,
+          "sha256": "84d38aac226b5274baca7a292e2039f5284a35d8a2ae31074a475fad87da310b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfm",
+          "size": 1263,
+          "sha256": "bec8332e0da8a9a9505bb3bf7bb3e9f144b37832873463b6a39610b11598f6a3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb",
+          "size": 32734,
+          "sha256": "9fe20cb9ef24a0f4c74d38a65d4eee5cff3165f3b8600407ceba396aeb2b7617"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfm",
+          "size": 1303,
+          "sha256": "cb3b431ea837fc90a263c3aad117b6e907d48fd02b4d6f4a3364f564c38fc717"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb",
+          "size": 32762,
+          "sha256": "b37e8671820b0753c6e233eaa3230c6ab9cff04e6c4baee312d60ae261e5aba1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfm",
+          "size": 1303,
+          "sha256": "b2ab39f7419608f41e271b3bf95868750e6f33e4d97cb887842f0442fc9f90f0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb",
+          "size": 32726,
+          "sha256": "8150cbfac5cfe53040327df171c3059f10730b32cabf2504b01713d639a11feb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfm",
+          "size": 1303,
+          "sha256": "67b9a83505eca68625fb9431a77e5fa8b7a699421882d63aeb6651d36c3323e4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb",
+          "size": 33993,
+          "sha256": "ba5207eea69eaa9b598de2bd3d9aef27c4ff9831524400f70ff6a0dd3e36059b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfm",
+          "size": 1303,
+          "sha256": "59f61364a5bc5bb418b53cdb47c55e1bd6e290d460131500af97600ddacf922f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl10.pfb",
+          "size": 35022,
+          "sha256": "2f7889c542b515c31c533f278b20aeee3cc963d1dff8bf6f83d5710c91890823"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl10.pfm",
+          "size": 1305,
+          "sha256": "483a1d987062f6339d000860502b82e4d7d969966fd45e895c9e3b145fb5098e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl12.pfb",
+          "size": 34586,
+          "sha256": "bc7215c2cf8cc530352cb7b9d4b81230fc8ec462606d032e4af443ea5f8aa106"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl12.pfm",
+          "size": 1305,
+          "sha256": "50e681fdb7d2952664cf47cd18fa55a426583940067faf2a885b7e219feee39f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl8.pfb",
+          "size": 34511,
+          "sha256": "09d1f8ba4a43177ccddcbb8eba8ac8974eabfd4b861837e761d07ac3f62d93b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl8.pfm",
+          "size": 1304,
+          "sha256": "b5f82d4a96ab21c13d8b64f58765ca9276bd2113af10969be98064e17d96d4ce"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl9.pfb",
+          "size": 34568,
+          "sha256": "8b72fc7d1cb67471c1d739077d08ea94674bf0a9875b9b2b1cac39e3082e8c44"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl9.pfm",
+          "size": 1304,
+          "sha256": "c526446d7110c7edc1044dadea47b992e9e9cc2c3b441c87908439112d1cc76f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsltt10.pfb",
+          "size": 30171,
+          "sha256": "e2fb64ccb390ca467c6b42c43d79eab19083bbf67e15a0810ff282f7bcd31859"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsltt10.pfm",
+          "size": 581,
+          "sha256": "8cb0e3d174dbd6396d9ceee32c7db3f47b6109816aca34bf4545192574b506e0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss10.pfb",
+          "size": 24457,
+          "sha256": "c9071fd676395df32520c3d906f2829898ea735f66c40a40578dec3c0ac51738"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss10.pfm",
+          "size": 1153,
+          "sha256": "6493764f0c5c41402b09b2e3c3258a2b7f3939dcdbbb873d9f63db6796ba94c5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss12.pfb",
+          "size": 24393,
+          "sha256": "f64255358fe4e6cd89066d08371a60efc33ae0c475854e87b8d0a49a47c29d41"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss12.pfm",
+          "size": 1153,
+          "sha256": "18bf900da979dc5c961feb3eed1912ef644208b47f6e1cff81e718dbf7444e24"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss17.pfb",
+          "size": 24416,
+          "sha256": "dfb6edd9d0cbbc24d19df1878ed00cbd756b65df683cb6274025eed96f73053d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss17.pfm",
+          "size": 1153,
+          "sha256": "f4236b27ab9d0600a48c9087a8d9679866b23c773f3c5dd67803e83932a4b5c1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss8.pfb",
+          "size": 24420,
+          "sha256": "7f5744c7caf27c407888cadae84be6cd7c05f34cf2c5df385b8f69fa349a3feb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss8.pfm",
+          "size": 1152,
+          "sha256": "de0de7b7112757b22116a6fd643077769e1065433dc47fb968fe53cb437c006e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss9.pfb",
+          "size": 24373,
+          "sha256": "abf756f5c0c4fd2edf9b3811e3a4182f5d2ba7723b6ffaeb98237e026661a2fc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss9.pfm",
+          "size": 1152,
+          "sha256": "bea2ddc7816b0a372caf1bf01215b1c93ffc8e5472610467c5939dbe21aa7057"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssbx10.pfb",
+          "size": 28902,
+          "sha256": "9648958f2a77e1d3b5aa003852d1f38fec099d662bb06afba297fda3d4eba8ad"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssbx10.pfm",
+          "size": 1155,
+          "sha256": "25b6093b499319e50f198b05cb1fa64fae2678c3d6cde3c08f9f6ac46556f64b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssdc10.pfb",
+          "size": 28932,
+          "sha256": "54430f90a8d0e9dc4dec411c7d8422ef6e71e6ae657511879a7c4bdb6b0f2a2c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssdc10.pfm",
+          "size": 1155,
+          "sha256": "33bc588839766aec24dbd261f0dc81b8cf8d81f299274ee76bc0b0173f0cc023"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi10.pfb",
+          "size": 25150,
+          "sha256": "331ae5d760afd4ea9cd08b8b2529ac4c1bce761a532211f9336030941be02b8d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi10.pfm",
+          "size": 1154,
+          "sha256": "e8789a182260126f2266c16247b9f3605bd9f82db7eed894fad60e040a8a3d42"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi12.pfb",
+          "size": 25095,
+          "sha256": "6f090883e30a15d688165e8481ea7fc0a4c1663ae89ce505226aed19af6f649a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi12.pfm",
+          "size": 1154,
+          "sha256": "e407bb09392ef1de8ec7fe998c3cf59fdf9d6ecfbc6476693993fdbd0eeadd6b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi17.pfb",
+          "size": 24977,
+          "sha256": "9920404d1a60689fb498b15739adc0a423cf4486ac06ac70c4d47202f7e82dda"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi17.pfm",
+          "size": 1154,
+          "sha256": "8dee29bf1a9ce221201184bc6447312d791bc0ab00345711a3d4e982f233ca9d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi8.pfb",
+          "size": 25168,
+          "sha256": "be3b4c8a485e5dbc1aa7287ff6d575ba578526c80e7e4be2f5f36ad9d7cb5a84"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi8.pfm",
+          "size": 1153,
+          "sha256": "80410197cc2b931bf76f9f8704036f5f52db05592399a3c0cde1567764c160fb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi9.pfb",
+          "size": 25029,
+          "sha256": "0fc2eaf7e91014eaea0c69f3ca623183953eab674792876e1c7f4abc976ba0b0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssi9.pfm",
+          "size": 1153,
+          "sha256": "27b8d1ffc92f42147bcb416d238d34e338dc9a045326629038eda1dacdc7d1af"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssq8.pfb",
+          "size": 28158,
+          "sha256": "33ef7002f714deb02973e736bf036e390641a5f01c428c0872ef58cb0aed7773"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssq8.pfm",
+          "size": 1153,
+          "sha256": "f5966048bda007154b70bb812fb8a22287711744c59612d64ef92475e2bdfb22"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssqi8.pfb",
+          "size": 29668,
+          "sha256": "c52415b041cd9f34b620a8bccf25651dd3a91190e454c9ec84c85cdd8fe7a459"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmssqi8.pfm",
+          "size": 1154,
+          "sha256": "41b6a3c98f0470ea4d732ec2254a81776471bf575940a7a555021a7663add0c7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb",
+          "size": 32569,
+          "sha256": "62ee8cef552017551cd3e026a483e700730103eceaad959c87b7730017f59cff"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfm",
+          "size": 661,
+          "sha256": "8535d3ce91c81df163052a15dcdef3945801b2edc017d69cd5fd4539f495ae0d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb",
+          "size": 32915,
+          "sha256": "46da57e5a06866efa9a20f3dd350811b5d3279a5ae789af63e530f1f570e3c7f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfm",
+          "size": 660,
+          "sha256": "c9b4d6f1f2e8a271d742bd5cc0b8d107722c22aa75326d154527e4afd864063b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb",
+          "size": 32587,
+          "sha256": "73eed8a83a07d8ef04d240da22bce1fd3646074f46179e3677f4f42a542f20b6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfm",
+          "size": 660,
+          "sha256": "90df4e9b25838c400d8963e46e14f820cede0f8ad0b7b74fa6c041de97a13633"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb",
+          "size": 32716,
+          "sha256": "583b65bd1857bffc2ab184fcb4aad4e70e12eb05c9ca9f1c58c9a00a86c8bccf"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfm",
+          "size": 660,
+          "sha256": "845bff6a9de70c7891764af68f0c9ed65c85e5a761db11c1831a18ddeef27a6e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb",
+          "size": 32626,
+          "sha256": "2313392f0f4cd974d9da5fb54a52feae126059759edc04a4e47e33ea6027418b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfm",
+          "size": 660,
+          "sha256": "41a3b578319ffee89fc20430fced660538082f739a25311152cc11d3d1a0a29a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb",
+          "size": 32442,
+          "sha256": "8049871d56d74fe3f8f2375afbb1e59b149bf6835027b4a101051cfca1c1a779"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfm",
+          "size": 660,
+          "sha256": "ed3f2dc7ae60e43930f71ad1393d92f05822c26f44dbdb8b15d527f8275bab6e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtcsc10.pfb",
+          "size": 29025,
+          "sha256": "f1835964507385f4cb9b3234d4a73e4c696077e81d17f701fbeffb2ac4039f68"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtcsc10.pfm",
+          "size": 581,
+          "sha256": "8980e64e9dbbccaece96083384509812a76eb9fb4adad362a47bd25342dfc79d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex10.pfb",
+          "size": 29352,
+          "sha256": "0bd2d03c2659882706817b0110d7afbb02928b7a65b799ff48831be0173eeffb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex10.pfm",
+          "size": 580,
+          "sha256": "e1d76313e27e72cc0af95d234a5dc0a3e9d598c8e5003c861deebee0c75dbc15"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex8.pfb",
+          "size": 24887,
+          "sha256": "bd1d1cd8121b70c5780caf61694cbf206635cdecd5a16c2890ce2a64808f764f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex8.pfm",
+          "size": 579,
+          "sha256": "e524dda695b9d77592d90167a00d1fce18fdd1c5813fee021aa401e9db5dc0b2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex9.pfb",
+          "size": 29687,
+          "sha256": "2c216bb0a7f7141dd3a91c51cc68d01158d8febdff39adaaab9778040a92d04c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtex9.pfm",
+          "size": 579,
+          "sha256": "b4af1cc5600c3d87b02974fae4498303b71c7ccdcbdc134c09c6453b1ef0ad5e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb",
+          "size": 37944,
+          "sha256": "b6f162e1549a649c7e9b2edfb77306f60e1b0da74547f33cba39ff6ba0bdd473"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfm",
+          "size": 1301,
+          "sha256": "874c44691906223ecbdf92ed72e41c78a9fe069de7e7ea6540adf15f9f6465b9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb",
+          "size": 36118,
+          "sha256": "4f343bda5844ca1782bbad5e6d4052519c2f4e6f1e3bfb1a3a514a280e2608c9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfm",
+          "size": 1301,
+          "sha256": "800a8739cb6c6f624e8cdfbf95efac2922977d1175d00965cc0c44bf0846f8f9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti7.pfb",
+          "size": 36607,
+          "sha256": "b95ecd4cecaba5f0466633ab32e57c26b10eee0466dbcd8f00f2e2275f948f3d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti7.pfm",
+          "size": 1300,
+          "sha256": "15b3b40d6268df04616d3508e6585b4f7ec32234a7f8bac81bdd78907f3c2fdf"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti8.pfb",
+          "size": 35660,
+          "sha256": "3f4a293229674c404e223566b807d0e6198762016e731fb286488e30019e21c0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti8.pfm",
+          "size": 1300,
+          "sha256": "e034039550f0cccd67b28eabfd96efd6cb387f79d195dbc0e65b31a2bad9b8bd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfb",
+          "size": 36310,
+          "sha256": "8eba22ca33c0bb7c77d634c3c017ce458580959bd865a2439638f2898ed3b95a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfm",
+          "size": 1300,
+          "sha256": "0db47cf37e323c3b63ca3d40f0a74e89df1325014a8004bac78bee4c3f780f59"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb",
+          "size": 31099,
+          "sha256": "d6bdecc0378f3cd16683d1ac348bdbc4ccde9a552e87b53fe9e2de5cfc7aa61d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfm",
+          "size": 579,
+          "sha256": "3282a9b0f83110bce51fd678a9109a6e9acf0df4c77239edc17620af9daae045"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb",
+          "size": 24252,
+          "sha256": "cc6ac592f4045f6726b0cd5cbb1f623a44fe5af2559b967d5ad32470e49cb1c6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfm",
+          "size": 579,
+          "sha256": "5dd4be81e1a7ae2417472d5feb163b31fa3ddb4b6cd1337e0bae01e9256a4ed9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt8.pfb",
+          "size": 24287,
+          "sha256": "b0230533515d47ce911c053be37ffb37aa29b114105c5fbb985ea95e8c221143"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt8.pfm",
+          "size": 578,
+          "sha256": "81ad761011d56d1ea1a2550696fa3b4823e92cf36fb4ba1544125702a8db3269"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt9.pfb",
+          "size": 29078,
+          "sha256": "b16a3e758b3da3aca15e1748fb89ad3552acd648666015628c90d06f32ba3f8d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt9.pfm",
+          "size": 578,
+          "sha256": "24f7927f435e4c6ef5c45dc34eb4e6b71b21e0865667af92322d87f8d938bca9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmu10.pfb",
+          "size": 32955,
+          "sha256": "d060c704dcf359b57d03bad8684169c41922a1f674eaa23f4589d59061a42dda"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmu10.pfm",
+          "size": 1300,
+          "sha256": "a9cee38f0076f4d6ee73f6473b83fb76535f32602137f78b9634a473501e3851"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmvtt10.pfb",
+          "size": 29471,
+          "sha256": "1752f4b13e4e38da7c5f8aa497c92a102cc883cb80a6655989bffed5366773e2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmvtt10.pfm",
+          "size": 1306,
+          "sha256": "b3ccea1119e0a874dee369bf5d0defc5d7821549ff1ec8469126226cb2c85688"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy5.pfb",
+          "size": 33824,
+          "sha256": "65be796f0db8c0d0b29859a28332aaf0861b931ad25a4c0ef94cbc03d6c44b81"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy5.pfm",
+          "size": 661,
+          "sha256": "e5f4e79cc27d19674576c7f1bd70286acb344f5f259ff83353f10dd21b389edb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy6.pfb",
+          "size": 33380,
+          "sha256": "7767d3ee98b8ebf33e3636aa2542a5d0c8a1b019255a06f21c039a938445dd07"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy6.pfm",
+          "size": 661,
+          "sha256": "ecba83b739a37d7a5d6dd907cad867e9d2c4b35d4522a18738140cd40bf4caa8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy7.pfb",
+          "size": 30068,
+          "sha256": "643914e3072b41564a8e39fbeaa7b9c9c795d71841ce749194c5df2e5bd440d0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy7.pfm",
+          "size": 661,
+          "sha256": "66b7047351fcfc18a03faa1bd56493c95c5ef709bdeef43434f877ba457f1396"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy8.pfb",
+          "size": 29407,
+          "sha256": "d16c68314f9c9405fb936a9c54a6f0b5777b7772718a02d98628f93a40b68e10"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy8.pfm",
+          "size": 661,
+          "sha256": "1a6c461b89211e812872ea5ebeb2ed086b84c21e127ab7c8f6686f9cef3e6da2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy9.pfb",
+          "size": 27817,
+          "sha256": "a274b78189512361e4a724251d00c7c8e33cc242adbe46ca8fbaed18dace8ca0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy9.pfm",
+          "size": 661,
+          "sha256": "09c7840557a7ab7da0e8784fba3d70e06ed723dfa33a2a1c977e93da644a78b6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmcsc8.pfb",
+          "size": 32957,
+          "sha256": "0c51e5a2a8d60c9d77aa082e98551a264460ac2b542610756772279b45da0333"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmcsc8.pfm",
+          "size": 1289,
+          "sha256": "311d8946556df1629a7fd88d1ef7ad9954ff0f3cc0e93ade09968461d642d380"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmcsc9.pfb",
+          "size": 31942,
+          "sha256": "62d2f21199d118087af7fc85203f953ab694eeef51957b7afb98de055f96c484"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmcsc9.pfm",
+          "size": 1289,
+          "sha256": "98b484e288133b9517cd3b2e5c92de6f376c38c041d7ad58d027113ab344b9a5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex7.pfb",
+          "size": 30457,
+          "sha256": "df327fc28dc3ce615dc91399f335ec2e1e646e34929936be16836875d5ffaf54"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex7.pfm",
+          "size": 670,
+          "sha256": "73e165ee261b834c6cc8021076a8271cc9c2c84cfa4047afed6a174b2e020ea5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex8.pfb",
+          "size": 30273,
+          "sha256": "778a2aaea4bf9d19ce2a7342864fa2696c07770c86d36a62e2ef799ad0724b05"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex8.pfm",
+          "size": 670,
+          "sha256": "72690109c3f1907371734f4595fcb54a85429694a6d83fde33682f2a08d0400e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex9.pfb",
+          "size": 30212,
+          "sha256": "b7aacad3b24221cf6ccfedb08708444a00ded5d3f24c5cff79dcc4450d65ab16"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex9.pfm",
+          "size": 670,
+          "sha256": "90206956a473c82b30ea309c719dd2659415dff40e06984cddff8c2134069962"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib5.pfb",
+          "size": 40540,
+          "sha256": "8e6ae2dc30a733de40ae65fc83466226027a67419c00f8287d78c9e470b56e1c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib5.pfm",
+          "size": 1213,
+          "sha256": "95eed047fe389edc51c1672c9f59ebd2361be11448dfaf24d5452d6d500f282f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib6.pfb",
+          "size": 38151,
+          "sha256": "73a26cbc9db541823dee42dac89446b6d3b7e95f6f5cd20dda121b5e3dcc94f4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib6.pfm",
+          "size": 1213,
+          "sha256": "5c2ab7086d7c10e49e6844403cbd2f3ba14d6284e93cea8de633ac68def700de"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib7.pfb",
+          "size": 39386,
+          "sha256": "a549852af2f5fc02fdd64b0b40ddec91936f61630f130e0e7be8ebc809463cc8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib7.pfm",
+          "size": 1213,
+          "sha256": "92d25d31f2b0f256739c711486556bc65f097fa652524d6e3a112b62988d57dd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib8.pfb",
+          "size": 35479,
+          "sha256": "46125aef54fc4ff14c8a8e1a9d3a5bb2a50bad681fb483e3ca314fbf39e5eb38"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib8.pfm",
+          "size": 1213,
+          "sha256": "c9e3cb093fab487e6dd2850b90a36231b282468fa90e29086064be5d9d2100a8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib9.pfb",
+          "size": 36510,
+          "sha256": "8a8113f5c8d05a96a398001fbf616fbc62fffc42dc53dfc97a286a64fb0078d7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib9.pfm",
+          "size": 1213,
+          "sha256": "e54f1ebdee9fe2084c8132d196a33fac5fc64a933ca660f25e00ac5fbb8ad3fd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyb10.pfb",
+          "size": 37781,
+          "sha256": "6f3120c7ae6c6477cc3963ccbf0421537faaddf47b3bca57fa8b04e8e6c10cba"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyb10.pfm",
+          "size": 1546,
+          "sha256": "542d8cb9ff761bb4aa8abc56e2ed0e5a6be469e8192d20d3a8873322a07d47bb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyi10.pfb",
+          "size": 42244,
+          "sha256": "4593709f6165d1987cfa665de5a643d46720f931f8ea4778849eb5bbd5d9863f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyi10.pfm",
+          "size": 1626,
+          "sha256": "e6fbc3a417bebcf77c95f97c1ca5ef33b13e617aa0be159c7e1dfbc1e715e0b2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyr10.pfb",
+          "size": 40110,
+          "sha256": "bd4fcf73c8a1d1abbc10473e0186e2c7e519588dc05dab6998f49f04df1fce0f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyr10.pfm",
+          "size": 1546,
+          "sha256": "f60118a3c86326e8a131a79782cdde53a1ba7b2bab0d28d254ec2a059dd9dd09"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncysc10.pfb",
+          "size": 39820,
+          "sha256": "7f933c74f42e449d69afe9d3c75b5d3a80c2091877ea4ece64c43e23d531f68f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncysc10.pfm",
+          "size": 1435,
+          "sha256": "4eb6c82cae1fc905b7974db14bbcdbfdfdfb40c96b4a624bce865db3d618be8c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyss10.pfb",
+          "size": 21783,
+          "sha256": "fd738acbee98be96e137a4ee138871e439c6b30434783288357210f1341cbe14"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/cyrillic/wncyss10.pfm",
+          "size": 1547,
+          "sha256": "c667925b76462f1ceb55037bf19594e68058245eb3ea853803acd2fce2f29afc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex10.pfb",
+          "size": 12536,
+          "sha256": "a93b3c5d1e64c2305c1648de7c7b4903c55b5a59a816e37222e8ec8c418cc605"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex10.pfm",
+          "size": 529,
+          "sha256": "c3b571d0b0b3267c38befd666f1e30de52f6317d9dfacf07cfd71cb5ab6819c4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex7.pfb",
+          "size": 12103,
+          "sha256": "6cc1d0b9cb1ccb286c4b904c685d466714c6c707e0c2d3b709a40126d89aadee"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex7.pfm",
+          "size": 528,
+          "sha256": "8d3d1e6c3e8c43348af4265ed93c9a38711723f77f2c22465d41a6ae43706f2a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex8.pfb",
+          "size": 12054,
+          "sha256": "e0ff48e411d1166c19fbfd1812831c6ad4c03ebf00ed398570c41dce2871fc7d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex8.pfm",
+          "size": 528,
+          "sha256": "e4a1dbfe829f734c7703cad73db62369676102dbc0d42edc8456310a1a797f4c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex9.pfb",
+          "size": 11989,
+          "sha256": "78ab9725c311f27ea8f062c567c5e6981d3eec38b3dd0d50114abc6e48cc9390"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/euex9.pfm",
+          "size": 528,
+          "sha256": "ac92256e4e391ff43643dc5ea4bba8d98c23226a8f35e842f9fc15501cebcf12"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb10.pfb",
+          "size": 21346,
+          "sha256": "bfefdbbb7b989c456b764683fe874625cd9f0496240f94b3be3dfe51bac5c729"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb10.pfm",
+          "size": 477,
+          "sha256": "ce10f0541cb8d07d35271a7e73c1691e5aad520b9f5c43e3d39ffba96e786779"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb5.pfb",
+          "size": 21612,
+          "sha256": "c9e5b3b89d55f56b31476973b4d73df3554de8b582acf452789cc9f3c67467af"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb5.pfm",
+          "size": 476,
+          "sha256": "abf47b7f861d3679bf75c3f58bf5fd70cc2bae246c690f0175ea70b22c62f949"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb7.pfb",
+          "size": 21375,
+          "sha256": "99ffbd8ad82e058588d7c8c188c8c594332e782c0287e1a59a3c01d64837c945"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufb7.pfm",
+          "size": 476,
+          "sha256": "cc528e31374f0984673eb4276b2ffcffd11aa915b0461e94647424181a31373b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm10.pfb",
+          "size": 21098,
+          "sha256": "0d4adc0d8d6b3fd993fe138b6863126d7122cd1ae180d0a19eca0759bf7d0975"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm10.pfm",
+          "size": 479,
+          "sha256": "9eaca9dd10ff819cda3209fa6ac220489f66a383fa12751ff9a3be81c3ebecba"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm5.pfb",
+          "size": 21550,
+          "sha256": "5e9e9e208ecdc198f68f87785ef84fccf3ab93291c7ead0a9ea1b1d6107983ee"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm5.pfm",
+          "size": 478,
+          "sha256": "3a0872e95a37e7c6bc3b48d507767f53888039f43ce4d0504975595748e74df0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm7.pfb",
+          "size": 21251,
+          "sha256": "8c5202802ed024ad905ab81b34a882c9473acf9e9ab7a717bcee3f0f57e985f2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eufm7.pfm",
+          "size": 478,
+          "sha256": "e004bd2b35f9964525de32ea1ae9e9bf7210ccc49e30568fdd255127919d0ae8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb10.pfb",
+          "size": 22394,
+          "sha256": "2aa1cd6768ce9159f7704593b58e4e24c846cea7d789242266aee31d1e74b900"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb10.pfm",
+          "size": 545,
+          "sha256": "97b1120047080e8bf8f0c69063b7888af71b165cb1907f627a68e64358945c0c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb5.pfb",
+          "size": 22964,
+          "sha256": "a07f6be2bb5d49c76286752071c26024b6216ade35a405d969079f10d5835dc5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb5.pfm",
+          "size": 544,
+          "sha256": "dd8cc5c2f068e15d5a5be8804ae8ef68387dd0d316c39f9a55e5e043c3f1e136"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb7.pfb",
+          "size": 22659,
+          "sha256": "f216d91301c9f2f32082ffa8c64c36c8aa2c1eb15da4bf9dc1697a24e8557311"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurb7.pfm",
+          "size": 544,
+          "sha256": "ea0fba16f109fe8402e37e3186cf8e2039771c2ab0104aa737d651b0d1e57c61"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm10.pfb",
+          "size": 22644,
+          "sha256": "988a860101f4b64cc0ca6e9b7b065db1b316e78da5d1838c89524bf098e4aec6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm10.pfm",
+          "size": 545,
+          "sha256": "95373e80a98451d547b6cd53a63c83845dc7bcb835e0525495d6721ff7d35af8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm5.pfb",
+          "size": 23170,
+          "sha256": "5cb5143825f985edc442eb71038f001ef5076c33702fba67484cfa5da118a7ef"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm5.pfm",
+          "size": 544,
+          "sha256": "1b646f3916bd3a4b52ec189b0f48565ee089a1df0f8418d974918c9da8c2af91"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm7.pfb",
+          "size": 22927,
+          "sha256": "df9a5603b3d8777ca91530bb8cb771b0ca84f5b464a29fb4ab65d9b98149c9f3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eurm7.pfm",
+          "size": 544,
+          "sha256": "2aac5a7b66fc4c62e64437e31428d72b466c3ad6de6ddbe4419c11645c1a412c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb10.pfb",
+          "size": 10672,
+          "sha256": "8e7bea692077eec638eb2ecf56672c47fdd94221e6de84898669a9b37091a252"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb10.pfm",
+          "size": 465,
+          "sha256": "01f2603cf0dda77083f9884c610e95836b5724e2733e843d2cb1a7122ea479e3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb5.pfb",
+          "size": 10761,
+          "sha256": "e797448356d3b2d974ff842b78cb3ea18acbefae3a5c843deea2b5f58d6dd907"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb5.pfm",
+          "size": 464,
+          "sha256": "874b8b2448bc121ce0fb4664a1d174dc92b5be3fad2030691b797772d841401d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb7.pfb",
+          "size": 10875,
+          "sha256": "753b67c595e2efa3617d82fd4349ef077540035eacc20f374a28fdd2b7b2b716"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusb7.pfm",
+          "size": 464,
+          "sha256": "e1f2baacf8aaa4b7fc765dc9e83b02767f825b33071511e55b4f357a95ed00f6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm10.pfb",
+          "size": 10538,
+          "sha256": "eb4a18f8f72bef82051509701331e459cd547c573b74430401cb699812a66a59"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm10.pfm",
+          "size": 465,
+          "sha256": "8530fe9209722ef707e6afcc811336b7bea230f8b03910f12953b00465306776"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm5.pfb",
+          "size": 10799,
+          "sha256": "24bd2076bba1f5d46c49a180879ed8bd026c0ca64d510fc524336439536458bc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm5.pfm",
+          "size": 464,
+          "sha256": "f553e45b846dd8ef101aa8f91ba9bf2fc531c0e95c8f6e08e8011026bcce626f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm7.pfb",
+          "size": 10655,
+          "sha256": "71d135350b292822e5b5d96cf3dd07c9da3fa3e88a0b298b42110e9f98b9c536"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/euler/eusm7.pfm",
+          "size": 464,
+          "sha256": "70830bd3845fa4bacd89777bdf71b1dd9dde6775d3d98c10ee707bd8d3642981"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy10.pfb",
+          "size": 10304,
+          "sha256": "356a161e9561788b35f4b6f9798d64bb30546d0a05b2b40fb52d44648a41e16f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy10.pfm",
+          "size": 345,
+          "sha256": "5cb283ef0c58f18c8e7cd8dab88aa627833c533471cdcc4b2562e31745526765"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy5.pfb",
+          "size": 5409,
+          "sha256": "de3f4799c0974b79584177889603f42324c56ec7d3026699aca04fefb3ebb823"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy5.pfm",
+          "size": 344,
+          "sha256": "0b9d406cf630bf28c1fbf379e36c01a2ae196cdcd0d10ef885b77ac283a0ddeb"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy6.pfb",
+          "size": 5369,
+          "sha256": "a463a287c13451540d0b4eb33b9aeecfba2c4116c3c75f76d2157fa86472839d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy6.pfm",
+          "size": 344,
+          "sha256": "48a5dc7c5229b8ed22aea3b1b80605e75314a026b0f8a249eef4277feb5c887b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy7.pfb",
+          "size": 5360,
+          "sha256": "5128d9b2192ac2f775d2705d3b0a92ae32155663b46938b43ffc8c63ee523c43"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy7.pfm",
+          "size": 344,
+          "sha256": "e98f9e095a24c0f1ce91456326a1bbd9c4a1a3bff60a2416bfff0aadfa295fc1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy8.pfb",
+          "size": 5395,
+          "sha256": "937c940c795701af5f66a4685d6796751256d944b707a4f19068a151a5e5e040"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy8.pfm",
+          "size": 344,
+          "sha256": "242cf3a47d7b4cf11b7a2c56a911b19784713ee760fb79d4637a710b3bca3e05"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy9.pfb",
+          "size": 10156,
+          "sha256": "6d7a37ed30c6b40484a641f22fdec374380655d1049274fc2ccd99f6839960da"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasy9.pfm",
+          "size": 344,
+          "sha256": "8c3b0dba902b3288a8d09b7c17458c41d1c24eb5ae10d5007fc6ab0b57546dc2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasyb10.pfb",
+          "size": 5370,
+          "sha256": "c723dd7262d13bf92dba4b25743536f7a0409fdb9495982eb40bf1bc5e202614"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lasyb10.pfm",
+          "size": 346,
+          "sha256": "3fd2bb3bbdfe16f9dd2d71a6642250597dbb88ff32139773d9a6f4e7b8386b7f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcircle1.pfb",
+          "size": 10594,
+          "sha256": "503d59829700006b46d6ddf4f90b045ee7f08350f89544b302e7d73711c4b68f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcircle1.pfm",
+          "size": 548,
+          "sha256": "e1b9da802e95ade4da94dd405cdac8afc3fc5747a78bc7974f0b756ec09ca82f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcirclew.pfb",
+          "size": 10615,
+          "sha256": "2f735239d6813c97f93d1d9fce4068f2f08b8033cf435db69c3d33c02fdce646"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcirclew.pfm",
+          "size": 549,
+          "sha256": "a54f72ec4f3f808d72de062021b10a73e55c51b7e6ffdc178d5baf3353d4a24e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmss8.pfb",
+          "size": 37691,
+          "sha256": "92c3a9300cb216c7d3f71add907a5c980425dfefa63ddb9de51c28c330495387"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmss8.pfm",
+          "size": 1129,
+          "sha256": "863afd12f3d01f2f4e52a4201e7e1c30f5e9757a46e2ef63d692bd2742e3b60c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmssb8.pfb",
+          "size": 34561,
+          "sha256": "9de3ab3b55e1f7f6783fe8b26e691cc32c1afa9a0d37b43ab97fe42569575250"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmssb8.pfm",
+          "size": 1130,
+          "sha256": "18a8281bcad27390c5c3965aaff15bf23fb39e1114379f43dde12bc6b73f7917"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmssi8.pfb",
+          "size": 39505,
+          "sha256": "d39f7bc081598287edf506ef7795796793a66d2e16330020b315d8583c3806d7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/lcmssi8.pfm",
+          "size": 1130,
+          "sha256": "fd47dccf544d6d0128c048acbe3b81cb0cc685b069b191585f953dd226c69f6a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/line10.pfb",
+          "size": 11493,
+          "sha256": "8bed0f3db560ddcd98fb1a1e9d58aed3ab2aef553c4364a32841b51ee5dc84a7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/line10.pfm",
+          "size": 545,
+          "sha256": "20b13625c46fcf0b6f53a34870d18dc4408bf0a59226999109f6d067ef819025"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/linew10.pfb",
+          "size": 11895,
+          "sha256": "415d63b2859d9dc7ba7e4c83a5e73463d059cfdb03bd3a8f509c211cdb166315"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/latxfont/linew10.pfm",
+          "size": 546,
+          "sha256": "baa0ce418d63f279e7f28829c9f87d3e95710e9eaf350a7c9d81632f2b316f47"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb",
+          "size": 31764,
+          "sha256": "f2e3b470b988a46272125e917531690d3c4d03ac7238f112b07337f972a537fa"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfm",
+          "size": 545,
+          "sha256": "447020af480071b7cff5536e96dc63deca976f7c9b9f5ea7682108eb24ced7ae"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam5.pfb",
+          "size": 33536,
+          "sha256": "a7a1893c3e1af52a1bc02cb2cff4a0acfd2aa7ced13d4a6ce797afc68c9f506f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam5.pfm",
+          "size": 544,
+          "sha256": "0e9d2b2d1f8969f9fac56ef5c2980a0aa00e927d25bf970aec694e575ab628b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam6.pfb",
+          "size": 32654,
+          "sha256": "8d5cc8c553da80c87067ee5584e2de1f3eee3dd823e2cd5be817f69cedc8e8ed"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam6.pfm",
+          "size": 562,
+          "sha256": "c1db39306ab9c29a8eca9e801426f4d30a1a37aad25c444f1384ef5957676659"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam7.pfb",
+          "size": 33366,
+          "sha256": "c96c9138119d9879757ad8c1ecb2cc25b0cac303ba3ee13d25d117fdbc71d2f3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam7.pfm",
+          "size": 544,
+          "sha256": "565a0239d68cb1b5be7a1850b958dc91589918f5cc69595332b841f2d4d4aca3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam8.pfb",
+          "size": 32516,
+          "sha256": "9c0956406ad185fea51a094bb9c4d036401a948b06bed67e8d61aad2e8d17586"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam8.pfm",
+          "size": 562,
+          "sha256": "ebccdbcb12c0fc777cf428a666e2bea280bad5e64653b8041a698190b4bbe192"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam9.pfb",
+          "size": 32553,
+          "sha256": "828f69e69e19bbd0b76246edccb191d5d8205d6bd82992b093b4951bde353d78"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam9.pfm",
+          "size": 562,
+          "sha256": "28c643138a180216e89f629257c235c64930ddd23a10529028f757af8d2f8295"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb",
+          "size": 34694,
+          "sha256": "d2121de7e7c14490a2d352e3b62e62882d6c300235464bfa577e6055696e6e62"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfm",
+          "size": 545,
+          "sha256": "b54459494cc7ccdb6aaebb43fb448abfba6819996aecbd7e5254809ca1f72d63"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm5.pfb",
+          "size": 35457,
+          "sha256": "4504066336bdfacd4a5ef1abfe80b8447ed712057ec6f66962eab31eb43a93de"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm5.pfm",
+          "size": 544,
+          "sha256": "cd26fdd2d69054c1ed2ce5605756cbec26a107af9372734f12bba3dd685789b1"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm6.pfb",
+          "size": 39731,
+          "sha256": "96d919a84d99d45f8a406132fe153758194eb8264dba0b169368db15ddf7ee24"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm6.pfm",
+          "size": 562,
+          "sha256": "04820c74843ba8b58318fbed327124fa09ac20bbd20e1998a6dfa1bf3affe31a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm7.pfb",
+          "size": 35309,
+          "sha256": "bd86d36def0f2d226cf773a195a88f88e424759f3ddaaf654de2ae670906734e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm7.pfm",
+          "size": 544,
+          "sha256": "f2a9bf14d69f7569ea8e1cefd98d11a3a5c4578afd77ecc84b20ec5132afdc29"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm8.pfb",
+          "size": 39445,
+          "sha256": "ee1361545cd3987b633d793c157cb72a14527fb16deaf5d8495b78529b919902"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm8.pfm",
+          "size": 562,
+          "sha256": "1e34b7d5cf98e9ef557b97feec75f8dbd1260f9b5edc0fbe4269e5661cc6584a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm9.pfb",
+          "size": 34770,
+          "sha256": "b36d2f8b3dc63370f34d257e3393929f574bcb6ba7ff40358d471019dd0fbc00"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm9.pfm",
+          "size": 562,
+          "sha256": "dbf6876ff11736384c0574cd16fff4400e1ba8f458e204a66a9579d863775980"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/ls-R",
+          "size": 2841764,
+          "sha256": "c463d0240ecc5aa717fdcf96ab0cd9c552d39c7010acc98842ac47ad0a396de5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/ifxetex/ifxetex.sty",
+          "size": 1458,
+          "sha256": "29bf0a43a57d8da4b3dc2fd722d34f80536f0e303cb1477d7cb5d2e29d949b8c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/luatex85/luatex85.sty",
+          "size": 5870,
+          "sha256": "6d2a0ec7974247ec0cfd5b2d823b15846c3a7186f4eab7779be299d592affe67"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/oberdiek/ifluatex.sty",
+          "size": 7324,
+          "sha256": "299bcbcf28ad66ded64e1df1d030f3d0d9834b82a1a4107987512fdecb0a61dd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/oberdiek/ifpdf.sty",
+          "size": 1300,
+          "sha256": "d7a9f2ff5bb5b79fbf7e505d1d193b6eec2e3a47e7a768b03c15d6e80246e9d0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/keyval.tex",
+          "size": 2725,
+          "sha256": "d60547815498ec62cf6bd5211f98328d11c26aff8b92d4b0204f7126ba9a82ef"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/pst-xkey.tex",
+          "size": 2369,
+          "sha256": "6bb2c9504712d19292a9884f6da3c14ccaa6e393e21c1fa7c10e652069acd04a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkeyval.tex",
+          "size": 19231,
+          "sha256": "0d0c2fb401da8cc11c01212777776ece1e1ba6d8fdf8a854bcb6941981aeda59"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvex1.tex",
+          "size": 5281,
+          "sha256": "55cb7f1198674521a37fa9984d8a881e55a06e87d0bfca74eaf596dd2be14446"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvex2.tex",
+          "size": 11330,
+          "sha256": "2df2a7c68b3b0c88416fcd001257df8e9f121a1fc02f4ac6ced334057f3ddb6c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvex3.tex",
+          "size": 3552,
+          "sha256": "57c08fdfe5491e2234827560d292f523c17c0bec36effdcdb5d98af6f01fd5e7"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvex4.tex",
+          "size": 3903,
+          "sha256": "dc36376aa9622e928a715b93fed4088dff934ce5583feb5c4161496c15ea5d52"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvtxhdr.tex",
+          "size": 2856,
+          "sha256": "938de1dfd7f095b5ca7db9741e87784165bca8afa91c10fb3237cecb4c264eac"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/generic/xkeyval/xkvutils.tex",
+          "size": 7677,
+          "sha256": "d0540509df36176abcac1db1d5a27f396265ed15bdc94a01f0d72108b7fe7068"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/amsfonts.sty",
+          "size": 5949,
+          "sha256": "dab8b0e621267acfd89736cf97bdcc02647c545c0719c4997be8a7d1bf98f9c3"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/amssymb.sty",
+          "size": 13829,
+          "sha256": "70838b061b56569dd3ed9f339b1bdd1c78ba185de49f27ceae331c97f48b5986"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/cmmib57.sty",
+          "size": 1068,
+          "sha256": "292f19bf69e7860c0130b47c8f0a7465faefc44b938a2a4dacc68373a78defbd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/eucal.sty",
+          "size": 1354,
+          "sha256": "0cf8e3e63f4a2d5a3548aabf02856a65152c7f1d18651ee6f9d4f0e57cdd2764"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/eufrak.sty",
+          "size": 1306,
+          "sha256": "a6d27c368a0697ce0d49149b4b51beca3ada63967db3e3f6f65c2c22df6c1c5c"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/euscript.sty",
+          "size": 1319,
+          "sha256": "8281bcb8a516e0b4468b7a7e620fc266a7852f3dd0aa744f7860fde14b095141"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/ueuex.fd",
+          "size": 1001,
+          "sha256": "3c21e58fd3335a42e07cc5c5fbbd65fee0ec03a6e147aa9bf8eb9123dafe0d5d"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/ueuf.fd",
+          "size": 1047,
+          "sha256": "97ae9b28e952c5f06675b3d55c1b08be62ccabe070b9bab99163a85628686091"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/ueur.fd",
+          "size": 1065,
+          "sha256": "09f73db4894a0d33d69ca040cc7dd035b08c9971aa249fed953759da03586bdc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/ueus.fd",
+          "size": 1063,
+          "sha256": "5d8f3989248f93de60df5eebbaba8b6d9c27f144668155a656b09215db3ca4cf"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd",
+          "size": 961,
+          "sha256": "48355e960333be747dd7b4500e76fde7c3ef0b1fa9c74ec0f1438af0d3a661a4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd",
+          "size": 961,
+          "sha256": "e20f21f6ed631cbe3a627d5da5fef82367732a7d51207f8df5ee7e9c77ee342e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amsbsy.sty",
+          "size": 2211,
+          "sha256": "4f806f0319e8e45acb2d0ea8052b78284ada7243ca80cbebe584b39c1b26bfcd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amscd.sty",
+          "size": 5309,
+          "sha256": "9e3aab628d025005ed81907770e26b78da82ed0256f43d1823549361db68466a"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amsgen.sty",
+          "size": 4161,
+          "sha256": "785f0b19d3ed9e5a94c5198c4400685ef3bb132a7e7c468000bbc1e547393f65"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amsmath.sty",
+          "size": 85093,
+          "sha256": "c8d08d3bade381e75672e476fe12495a9491a7cb5d275b4cc178c44d998119f8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amsopn.sty",
+          "size": 4116,
+          "sha256": "1bde81ae4bb2198d3f99aa4f0e0b7bd36a32f3a033edcbb871690119f3bc6af5"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amstex.sty",
+          "size": 69722,
+          "sha256": "170baa949e6a6c71fc7bfbb7c9f2e4162ecb7bf177b23604376218dd9d79a946"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amstext.sty",
+          "size": 2432,
+          "sha256": "3c27d940d38027ca930d9ecefc615d81985d018ba4aa5e19fe7bb2dd7ed639ca"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/amsmath/amsxtra.sty",
+          "size": 2030,
+          "sha256": "1020776b300b567a6a0387947352c60a6c383e35f69256aa5d9b5fad3d1e3c91"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/base/article.cls",
+          "size": 19933,
+          "sha256": "6960fffac3642c838fe7b0a975cfa8bb74e96da123b66defa457382df6ed7279"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/base/size10.clo",
+          "size": 8294,
+          "sha256": "e959e449b998490f22576db29ac5d8cca4eb3d38d51bf0892ba2db3fdb2ca676"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prauctex.cfg",
+          "size": 1476,
+          "sha256": "d880cb86130b8c8c02aa75b216c6600242a6f266a9e27e43cef3badb38e09914"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prauctex.def",
+          "size": 1631,
+          "sha256": "9f9185cc11c9f7f2af327582c958ee359fb105a939e73bd0ff1861bd9232d8a0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prcounters.def",
+          "size": 1349,
+          "sha256": "86ad79b0efe7b49d06b688eb5ca23137c04f19b4cb4cacb086a800c3a7ff38d6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/preview.sty",
+          "size": 13744,
+          "sha256": "c65caf4a0175e17fdd2fdd8abff9b5e02a26fb65c41350f0f946589cfd6888c9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prfootnotes.def",
+          "size": 903,
+          "sha256": "3448ddde49424b2d136c94438fdb46638b0e5ec90c5ca206846b60a39ea8d857"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prlyx.def",
+          "size": 1058,
+          "sha256": "2e8b23b6f276d75677d7a8ac2e8a9399de22c1bcc677728734225ecc172a6b2e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prshowbox.def",
+          "size": 1020,
+          "sha256": "2eff7c0190076b9a2099c9be88ba395f7ac7d10c6c55a24adbc4a73f2bb6fac6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prshowlabels.def",
+          "size": 2264,
+          "sha256": "a642dee2180328d30d3964f4bec32c574e7871458700e57101c69964a0f447b6"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prtightpage.def",
+          "size": 4841,
+          "sha256": "2e0d32ef2dd64138e9f311b55a5cd9cabe7db508bd36c269b9ec151708688767"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/preview/prtracingall.def",
+          "size": 1013,
+          "sha256": "66d1f49308a21f9e7ce7620cd18601261e11727bb225d40d01a5b9b254aa3fbd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/standalone/standalone.cfg",
+          "size": 1015,
+          "sha256": "eee813301558be2cb7032661dced5befb187d939808630a12c3e3dabe1248c09"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/standalone/standalone.cls",
+          "size": 28890,
+          "sha256": "3123d4bcff78912653f1e0e724d59cfa9ed96b55922f61180927c56e964b8c01"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/standalone/standalone.sty",
+          "size": 34858,
+          "sha256": "d654a5ff1636ad383a07182d8181c8d1eb27953f6b14eb9c48af209dccc4c9c9"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/tools/shellesc.sty",
+          "size": 3268,
+          "sha256": "05270de961663bc0169efce4dafad713c111c18ceeb9b0b833fe430f7d6ff6b8"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/pst-xkey.sty",
+          "size": 1694,
+          "sha256": "2242ff3e0e6f60799ee06755649744022b8e44160c198bfa02195e6d4b6febaf"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkeyval.sty",
+          "size": 4962,
+          "sha256": "3acbb1a51843e9c93481f7cabd7e154a22403cdd2ee4ed0bbbf75ad0e5d178bc"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkveca.cls",
+          "size": 1908,
+          "sha256": "2e2a4de36cd98600eba0974767efc652a62af79ec108deebfa0529eba4a89eb4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvecb.cls",
+          "size": 1635,
+          "sha256": "587f43f764a7f1527850f166b5fcf16e87929f852bdd9d8adec656a5b569041f"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvesa.sty",
+          "size": 2046,
+          "sha256": "a4186c15a5aee761178dbe6f62e4378a96b7a20b3adb2a034be2936a06aba307"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvesb.sty",
+          "size": 1921,
+          "sha256": "2ecf0d2b1475ee1bb7656f736bc7e27c43404b9b03037c5c768656552c5d280e"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvesc.sty",
+          "size": 1811,
+          "sha256": "53b7ab27d6375ecd203d0b9b5ef67a39f640508c9ccf3422269048702418a71b"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvltxp.sty",
+          "size": 3468,
+          "sha256": "ec339bf62e1b08644962e66a2b6f160067bb716b4392cd4e77fa125a37ec68fd"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/tex/latex/xkeyval/xkvview.sty",
+          "size": 6916,
+          "sha256": "3c0d9d07aad9beb427d077f596aedad4635daf0ce5c76b4d04c644bd5c5822d2"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-dist/web2c/texmf.cnf",
+          "size": 35430,
+          "sha256": "e360a012dc1d6df0fe870656529119182483fc7b400e9fa449a0f0a8ed533c83"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-var/fonts/map/pdftex/updmap/pdftex.map",
+          "size": 3236212,
+          "sha256": "2dbf67c15bffa0d68bb7d310fb5c0a15a456d4481398cd7c25c9de66fcf834f0"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-var/ls-R",
+          "size": 2472,
+          "sha256": "2d66f80a73961288cc61bb6629b69beca0b6829dbeb1a11550747d6e28d7cbfe"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf-var/web2c/pdftex/pdflatex.fmt",
+          "size": 4253014,
+          "sha256": "eb1db35ca6615b05174e0a8b146c59ef8fe71bf438af08aa155f75cbb51b9ad4"
+        },
+        {
+          "path": "chrome-extension/resources/texlive/texmf.cnf",
+          "size": 625,
+          "sha256": "479f04307e0aebd44b07f02aadf7f6cb5612b4cb6618f065e2efc7ef75eab24d"
+        }
+      ]
+    }
+  ],
+  "mirrors": [
+    {
+      "source": "wasm/pdflatex/pdflatex.js",
+      "destination": "chrome-extension/resources/scripts/pdflatex.js"
+    },
+    {
+      "source": "wasm/pdflatex/pdflatex.wasm",
+      "destination": "chrome-extension/resources/wasm/pdflatex.wasm"
+    }
+  ]
+}

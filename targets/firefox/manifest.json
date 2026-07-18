@@ -1,0 +1,64 @@
+{
+  "manifest_version": 2,
+  "name": "TeX for Gmail (WebAssembly)",
+  "short_name": "TeX for Gmail",
+  "description": "Render LaTeX as images in Gmail using a local WebAssembly compiler.",
+  "version": "1.0.0",
+  "author": "TomasOrtega",
+  "homepage_url": "https://github.com/TomasOrtega/TeX-for-Gmail",
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "permissions": [
+    "contextMenus",
+    "https://mail.google.com/*"
+  ],
+  "background": {
+    "page": "src/background.html",
+    "persistent": false
+  },
+  "browser_action": {
+    "default_icon": "icons/icon.svg",
+    "default_title": "Insert LaTeX",
+    "default_popup": "popup/popup.html"
+  },
+  "commands": {
+    "render-selection": {
+      "suggested_key": {
+        "default": "Alt+Shift+L"
+      },
+      "description": "Render the selected LaTeX in Gmail"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "run_at": "document_idle",
+      "css": [
+        "src/contentscr.css"
+      ],
+      "js": [
+        "src/utils.js",
+        "src/communicator.js",
+        "src/portwrapper.js",
+        "src/latex.js",
+        "src/contentscr.js"
+      ]
+    }
+  ],
+  "content_security_policy": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data:; style-src 'self'; worker-src 'self'; object-src 'none'",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tex-for-gmail-wasm@tomasortega",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  }
+}

@@ -2,71 +2,58 @@
 
 importScripts("../resources/scripts/pdflatex.js");
 importScripts("../resources/scripts/browserfs.min.js");
-importScripts("pool.js");
 importScripts("communicator.js");
+
+const TEXLIVE_BASE_URL = "../resources/texlive";
 
 let thisWorker = self;
 let comm = new Communicator(thisWorker);
 let bfsWindow = {};
 var pdflatexModule;
 var buffer;
+var resolveWorkerReady;
+var rejectWorkerReady;
+const MAX_TEX_SOURCE_LENGTH = 24000;
+const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const WORKING_DIRECTORY = "/app/working";
+const workerReady = new Promise((resolve, reject) => {
+  resolveWorkerReady = resolve;
+  rejectWorkerReady = reject;
+});
 BrowserFS.install(bfsWindow);
 
 BrowserFS.configure({
   fs: "MountableFileSystem",
   options: {
     "/texlive": {
-      fs: "CacheFS",
+      fs: "XmlHttpRequest",
       options: {
-        fast: {
-          fs: "AsyncMirror",
-          options: {
-            sync: {
-              fs: "InMemory"
-            },
-            async: {
-              fs: "IndexedDB",
-              options: {
-                storeName: "texlive"
-              }
-            }
-          }
-        },
-        slow: {
-          fs: "XmlHttpRequest",
-          options: {
-            baseUrl: "https://cdn.jsdelivr.net/gh/TeX-for-Gmail/TeX-Live-Files@2019.0.4/texlive",
-            index: "../resources/data/index.json",
-            preferXHR: false
-          }
-        }
-      }
-    },
-    "/formats": {
-      fs: "AsyncMirror",
-      options: {
-        sync: {
-          fs: "InMemory"
-        },
-        async: {
-          fs: "IndexedDB",
-          options: {
-            storeName: "formats"
-          }
-        }
+        baseUrl: TEXLIVE_BASE_URL,
+        index: "../resources/data/index.json",
+        preferXHR: true
       }
     }
   }
 }, function (e) {
-  if (e) throw e;
-  else {
+  if (e) {
+    rejectWorkerReady(e);
+    return;
+  }
+
+  try {
     bfsWindow.fs = BrowserFS.BFSRequire('fs');
-    pdflatexMod().then(m => {
+    pdflatexMod({
+      print() {},
+      printErr() {}
+    }).then(m => {
       pdflatexModule = m;
       buffer = new ArrayBuffer(pdflatexModule.myWasmMem.buffer.byteLength);
       copyBuffer(pdflatexModule.myWasmMem.buffer, buffer);
       console.log(`${thisWorker.name} is ready!`);
-    });
+      resolveWorkerReady();
+    }).catch(rejectWorkerReady);
+  } catch (ex) {
+    rejectWorkerReady(ex);
   }
 });
 
@@ -75,38 +62,121 @@ function copyBuffer(src, target) {
   return target;
 }
 
-function remove(fs, p) {
-  p = fs.realpathSync(p); // normalize
+function pdflatexMod(opts = {}) {
+  return new Promise((resolve, reject) => {
+    let onAbort = opts.onAbort;
+    opts.onAbort = reason => {
+      if (onAbort)
+        onAbort(reason);
+      reject(new Error(String(reason)));
+    };
 
-  if (fs.statSync(p, true).isFile())
-    fs.unlinkSync(p);
-  else {
-    fs.readdirSync(p).forEach(el => remove(fs, `${p}/${el}`));
-    if (p === '/') return;
-    fs.rmdirSync(p);
+    try {
+      pdflatex(opts).then2(m => resolve(m));
+    } catch (ex) {
+      reject(ex);
+    }
+  });
+}
+
+async function ready() {
+  try {
+    await workerReady;
+    return {
+      code: Communicator.SUCCESS,
+      payload: { ready: true }
+    };
+  } catch (ex) {
+    return {
+      code: Communicator.FAILURE,
+      payload: { err: ex.toString(), location: `pdftexworker.js, ready` }
+    };
   }
 }
 
-
-function pdflatexMod(opts) {
-  return new Promise((resolve, reject) => {
-    pdflatex(opts).then2(m => resolve(m));
-  });
+function afterReady(handler, location) {
+  return async params => {
+    try {
+      await workerReady;
+      return await handler(params);
+    } catch (ex) {
+      return {
+        code: Communicator.FAILURE,
+        payload: { err: ex.toString(), location: location }
+      };
+    }
+  };
 }
 
 // fileName is without extension
 function compileHelper(srcCode, fileName, outputFile, params) {
   copyBuffer(buffer, pdflatexModule.myWasmMem.buffer);
   pdflatexModule.FS.writeFile(`${fileName}.tex`, srcCode);
-  pdflatexModule.callMain(['-interaction=nonstopmode'].concat(params));
-  let pdfFile = pdflatexModule.FS.readFile(`${outputFile}`);
-  return pdfFile;
+  pdflatexModule.callMain([
+    "-interaction=nonstopmode",
+    "-halt-on-error",
+    "-no-shell-escape"
+  ].concat(params));
+  return pdflatexModule.FS.readFile(`${outputFile}`);
 }
 
-function compile({ srcCode, params }) {
+function requireSource(srcCode) {
+  if (typeof srcCode !== "string" || !srcCode.trim())
+    throw new Error("LaTeX source must be a non-empty string.");
+  if (srcCode.length > MAX_TEX_SOURCE_LENGTH)
+    throw new Error("LaTeX source is too long.");
+  if (srcCode.includes("\0"))
+    throw new Error("LaTeX source contains an invalid null character.");
+}
+
+function cleanupWorkingDirectory() {
+  const fs = pdflatexModule?.FS;
+  if (!fs ||
+      typeof fs.readdir !== "function" ||
+      typeof fs.unlink !== "function")
+    return;
+
+  let entries;
+  try {
+    entries = fs.readdir(WORKING_DIRECTORY);
+  } catch {
+    return;
+  }
+  for (let entry of entries) {
+    if (entry === "." || entry === "..")
+      continue;
+    try {
+      fs.unlink(`${WORKING_DIRECTORY}/${entry}`);
+    } catch {}
+  }
+}
+
+function compile(request) {
   let fileName = "source";
   try {
-    let pdfFile = compileHelper(srcCode, fileName, `${fileName}.pdf`, params.concat([`${fileName}.tex`]));
+    if (!request || typeof request !== "object")
+      throw new Error("Malformed compile request.");
+    requireSource(request.srcCode);
+    if (request.params !== undefined &&
+        (!Array.isArray(request.params) || request.params.length !== 0))
+      throw new Error("Custom compiler arguments are not supported.");
+
+    let pdfFile = compileHelper(
+      request.srcCode,
+      fileName,
+      `${fileName}.pdf`,
+      [`${fileName}.tex`]
+    );
+    if (!(pdfFile instanceof Uint8Array) ||
+        pdfFile.byteLength < 5 ||
+        pdfFile[0] !== 0x25 ||
+        pdfFile[1] !== 0x50 ||
+        pdfFile[2] !== 0x44 ||
+        pdfFile[3] !== 0x46 ||
+        pdfFile[4] !== 0x2d)
+      throw new Error("PDF output is invalid.");
+    if (pdfFile.byteLength > MAX_PDF_BYTES)
+      throw new Error("PDF output exceeds the size limit.");
 
     return {
       code: Communicator.SUCCESS,
@@ -118,116 +188,10 @@ function compile({ srcCode, params }) {
       code: Communicator.FAILURE,
       payload: { err: ex.toString(), location: `pdftexworker.js, compile` }
     };
+  } finally {
+    cleanupWorkingDirectory();
   }
 }
 
-function compileSnippet({ snippet, formatName }) {
-  if (bfsWindow.fs.existsSync(`/formats/${formatName}.fmt`)) {
-    let srcCode = `%&/app/bfs/formats/${formatName}\n\\begin{document}${snippet}\\end{document}`;
-    return compile({ srcCode: srcCode, params: [] });
-  } else
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: `Format ${formatName} does not exist.`, location: `pdftexworker.js, compileSnippet` }
-    };
-}
-
-function makeFormat({ preamble, formatName }) {
-  try {
-    let formatFile = compileHelper(preamble, formatName, `${formatName}.fmt`,
-      ['-ini', `-jobname="${formatName}"`, String.raw`&pdflatex ${formatName}.tex\dump`]);
-
-    pdflatexModule.FS.writeFile(`/app/bfs/formats/${formatName}.fmt`, formatFile);
-
-    return {
-      code: Communicator.SUCCESS,
-      payload: { msg: `Custom format sucessfully created at /app/texlive/${formatName}.fmt.` }
-    };
-  } catch (ex) {
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: ex.toString(), location: `pdftexworker.js, makeFormat` }
-    };
-  }
-}
-
-function clearCache({ removeFormats }) {
-  try {
-    remove(bfsWindow.fs.getRootFS().mntMap['/texlive']._fast, '/');
-
-    if (removeFormats) {
-      let rmCache = removeAllFormats();
-      if (rmCache.code === Communicator.FAILURE)
-        throw rmCache.payload;
-    }
-
-    return {
-      code: Communicator.SUCCESS,
-      payload: { msg: `Cache cleared.` }
-    };
-  } catch (ex) {
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: ex.toString(), location: `pdftexworker.js, clearCache` }
-    };
-  }
-}
-
-function removeFormat({ formatName }) {
-  try {
-    bfsWindow.fs.unlinkSync(`/formats/${formatName}.fmt`);
-    return {
-      code: Communicator.SUCCESS,
-      payload: { msg: `Format ${formatName} deleted.` }
-    };
-  } catch (ex) {
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: ex.toString(), location: `pdftexworker.js, removeFormat` }
-    };
-  }
-}
-
-function removeAllFormats() {
-  try {
-    bfsWindow.fs.readdirSync('/formats').forEach(fileName => bfsWindow.fs.unlinkSync(`/formats/${fileName}`));
-    return {
-      code: Communicator.SUCCESS,
-      payload: { msg: `All formats removed.` }
-    };
-  } catch (ex) {
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: ex.toString(), location: `pdftexworker.js, removeAllFormats.` }
-    };
-  }
-}
-
-function listFormats() {
-  try {
-    let formats =
-      bfsWindow.fs.readdirSync('/formats')
-        .filter(fileName => fileName.endsWith('.fmt'))
-        .map(fileName => fileName.split('.')[0]);
-
-    return {
-      code: Communicator.SUCCESS,
-      payload: { formats: formats }
-    };
-  } catch (ex) {
-    return {
-      code: Communicator.FAILURE,
-      payload: { err: ex.toString(), location: `pdftexworker.js, listFormats.` }
-    };
-  }
-}
-
-comm.messageHandler.compile = compile;
-comm.messageHandler.makeFormat = makeFormat;
-comm.messageHandler.compileSnippet = compileSnippet;
-comm.messageHandler.clearCache = clearCache;
-comm.messageHandler.removeFormat = removeFormat;
-comm.messageHandler.removeAllFormats = removeAllFormats;
-comm.messageHandler.listFormats = listFormats;
-
-// makeFormat({preamble: String.raw`\documentclass[preview, 12pt]{standalone}\usepackage{amsmath, amsfonts, amssymb, mathrsfs, tikz-cd}\usepackage[T1]{fontenc}\usepackage{stix2}`})
+comm.messageHandler.ready = ready;
+comm.messageHandler.compile = afterReady(compile, `pdftexworker.js, compile`);

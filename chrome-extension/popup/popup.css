@@ -1,0 +1,58 @@
+:root {
+  color-scheme: light dark;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+  padding: 16px 16px 8px;
+}
+
+textarea {
+  box-sizing: border-box;
+  font: 14px/1.4 ui-monospace, monospace;
+  min-height: 84px;
+  resize: vertical;
+  width: 100%;
+}
+
+.display-option {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+button {
+  background: #b3261e;
+  border: 0;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+#status {
+  color: #b3261e;
+  min-height: 20px;
+}
+
+.hint {
+  border-top: 1px solid rgb(127 127 127 / 35%);
+  color: GrayText;
+  font-size: 12px;
+  margin: 0;
+  padding: 10px 16px 14px;
+}
