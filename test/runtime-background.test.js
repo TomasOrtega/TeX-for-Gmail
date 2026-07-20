@@ -45,6 +45,7 @@ function loadBackground(options = {}) {
   const onMessage = createEvent();
   let scriptAttempt = 0;
   let resetCount = 0;
+  let reloadCount = 0;
   let imageAttempt = 0;
   let context;
 
@@ -223,6 +224,8 @@ function loadBackground(options = {}) {
         runtimeMessages.push(message);
         if (options.runtimeMessageError)
           return Promise.reject(options.runtimeMessageError);
+        if (message.type === "tex-for-gmail:restart-renderer")
+          return Promise.resolve(options.restartResult || { ok: true });
         return Promise.resolve();
       }
     }
@@ -256,6 +259,9 @@ function loadBackground(options = {}) {
           : "/src/background.html");
       return {
         href: options.locationHref || `moz-extension://test${pathname}`,
+        reload() {
+          reloadCount++;
+        },
         pathname
       };
     })(),
@@ -337,6 +343,7 @@ function loadBackground(options = {}) {
     renderCalls,
     resetCount: () => resetCount,
     revokedUrls,
+    reloadCount: () => reloadCount,
     runtimeMessages,
     scripts,
     timers,
@@ -524,7 +531,110 @@ test("Chrome background schedules cleanup after a failed render", async () => {
   }]);
 });
 
-test("Chrome background stays active while a timed-out render is still running", async () => {
+test("background gives queued renders a fresh execution deadline", async () => {
+  const releases = [];
+  const runtime = loadBackground({
+    renderPromise() {
+      return new Promise(resolve => releases.push(resolve));
+    }
+  });
+  const request = source => runtime.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source
+  });
+
+  const first = request("x");
+  const second = request("y");
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(runtime.renderCalls.length, 1);
+  assert.equal(
+    runtime.timers.filter(timer => timer.delay === 15000).length,
+    2
+  );
+
+  releases.shift()();
+  await first;
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(runtime.renderCalls.length, 2);
+  assert.equal(
+    runtime.timers.filter(timer => timer.delay === 15000).length,
+    3
+  );
+  releases.shift()();
+  await second;
+});
+
+test("background cancels work that expires while queued", async () => {
+  const releases = [];
+  const runtime = loadBackground({
+    renderPromise() {
+      return new Promise(resolve => releases.push(resolve));
+    }
+  });
+  const request = source => runtime.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source
+  });
+
+  const first = request("x");
+  const second = request("y");
+  await new Promise(resolve => setImmediate(resolve));
+
+  const deadlines = runtime.timers.filter(timer => timer.delay === 15000);
+  assert.equal(deadlines.length, 2);
+  deadlines[0].callback();
+  await assert.rejects(second, /queue.*timed out/i);
+
+  releases.shift()();
+  await first;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(runtime.renderCalls.length, 1);
+
+  const third = request("z");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(runtime.renderCalls.length, 2);
+  releases.shift()();
+  await third;
+  assert.equal(runtime.reloadCount(), 0);
+});
+
+test("Firefox reloads a failed renderer and rejects its queued work", async () => {
+  const runtime = loadBackground({
+    renderPromise() {
+      return new Promise(() => {});
+    }
+  });
+  const request = source => runtime.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source
+  });
+
+  const first = request("x");
+  const second = request("y");
+  await new Promise(resolve => setImmediate(resolve));
+
+  const deadlines = runtime.timers.filter(timer => timer.delay === 15000);
+  assert.equal(deadlines.length, 2);
+  deadlines[1].callback();
+  await assert.rejects(first, /rendering timed out/i);
+  await assert.rejects(second, /renderer is restarting/i);
+  assert.equal(runtime.renderCalls.length, 1);
+
+  const restart = runtime.timers.find(timer => timer.delay === 0);
+  assert.ok(restart);
+  restart.callback();
+  assert.equal(runtime.reloadCount(), 1);
+});
+
+test("Chrome replaces a renderer after its execution times out", async () => {
   let release;
   const runtime = loadBackground({
     manifestVersion: 3,
@@ -551,12 +661,70 @@ test("Chrome background stays active while a timed-out render is still running",
     false
   );
 
+  const restart = runtime.timers.find(timer => timer.delay === 0);
+  assert.ok(restart);
+  restart.callback();
+  await Promise.resolve();
+  assert.deepEqual(runtime.runtimeMessages.map(message => ({ ...message })), [{
+    type: "tex-for-gmail:restart-renderer"
+  }]);
+
   release();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(
     runtime.timers.some(timer => timer.delay === 5 * 60 * 1000),
-    true
+    false
   );
+});
+
+test("Chrome reloads locally when renderer replacement fails", async () => {
+  const runtime = loadBackground({
+    manifestVersion: 3,
+    renderPromise() {
+      return new Promise(() => {});
+    },
+    restartResult: {
+      error: "offscreen replacement failed",
+      ok: false
+    }
+  });
+  const render = runtime.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source: "x"
+  });
+  await new Promise(resolve => setImmediate(resolve));
+
+  runtime.timers.find(timer => timer.delay === 15000).callback();
+  await assert.rejects(render, /timed out/i);
+  runtime.timers.find(timer => timer.delay === 0).callback();
+  await Promise.resolve();
+
+  assert.deepEqual(runtime.warnings, ["offscreen replacement failed"]);
+  assert.equal(runtime.reloadCount(), 1);
+
+  const transportFailure = loadBackground({
+    manifestVersion: 3,
+    renderPromise() {
+      return new Promise(() => {});
+    },
+    runtimeMessageError: new Error("restart message failed")
+  });
+  const failedRender = transportFailure.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source: "y"
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  transportFailure.timers.find(timer => timer.delay === 15000).callback();
+  await assert.rejects(failedRender, /timed out/i);
+  transportFailure.timers.find(timer => timer.delay === 0).callback();
+  await Promise.resolve();
+
+  assert.deepEqual(transportFailure.warnings, ["restart message failed"]);
+  assert.equal(transportFailure.reloadCount(), 1);
 });
 
 test("Chrome background confirms an idle generation before closing", async () => {

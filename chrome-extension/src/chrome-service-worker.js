@@ -7,6 +7,8 @@ const OFFSCREEN_PREPARE_CLOSE_MESSAGE =
   "tex-for-gmail:prepare-idle-renderer-close";
 const OFFSCREEN_CANCEL_CLOSE_MESSAGE =
   "tex-for-gmail:cancel-idle-renderer-close";
+const OFFSCREEN_RESTART_MESSAGE =
+  "tex-for-gmail:restart-renderer";
 let ensuringOffscreenDocument;
 let offscreenOperation = Promise.resolve();
 
@@ -71,10 +73,22 @@ globalThis.texForGmailEnsureRenderer = ensureOffscreenRenderer;
 importScripts("controller.js");
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== OFFSCREEN_IDLE_CLOSE_MESSAGE ||
+  if ((message?.type !== OFFSCREEN_IDLE_CLOSE_MESSAGE &&
+       message?.type !== OFFSCREEN_RESTART_MESSAGE) ||
       sender?.id !== chrome.runtime.id ||
       sender?.url !== chrome.runtime.getURL(CHROME_OFFSCREEN_PATH))
     return undefined;
+
+  if (message.type === OFFSCREEN_RESTART_MESSAGE) {
+    serializeOffscreenOperation(() => chrome.offscreen.closeDocument()).then(
+      () => sendResponse({ ok: true }),
+      error => {
+        console.warn(error.message);
+        sendResponse({ error: error.message, ok: false });
+      }
+    );
+    return true;
+  }
 
   if (!Number.isSafeInteger(message.generation) ||
       message.generation < 0) {

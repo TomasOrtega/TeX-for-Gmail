@@ -20,19 +20,27 @@ const OFFSCREEN_PREPARE_CLOSE_MESSAGE =
   "tex-for-gmail:prepare-idle-renderer-close";
 const OFFSCREEN_CANCEL_CLOSE_MESSAGE =
   "tex-for-gmail:cancel-idle-renderer-close";
+const OFFSCREEN_RESTART_MESSAGE =
+  "tex-for-gmail:restart-renderer";
 const CHROME_SERVICE_WORKER_PATH = "src/chrome-service-worker.js";
 const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
+const RENDER_QUEUE_TIMEOUT_ERROR =
+  "LaTeX rendering queue timed out.";
 const IS_CHROME_OFFSCREEN =
   globalThis.location?.href ===
     chrome.runtime.getURL("src/chrome-offscreen.html");
 const ports = new Map();
 let mathJaxPromise;
 let renderQueue = Promise.resolve();
+let scheduledRenders = 0;
 let activeRenders = 0;
 let idleCloseTimer;
 let rendererClosing = false;
+let rendererFailed = false;
 let rendererGeneration = 0;
 let closingGeneration;
+
+class RenderTimeoutError extends Error {}
 
 function requireSource(source) {
   if (typeof source !== "string" || !source.trim())
@@ -297,16 +305,55 @@ function withRenderTimeout(render) {
   let timer;
   const timeout = new Promise((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new Error("LaTeX rendering timed out."));
+      reject(new RenderTimeoutError("LaTeX rendering timed out."));
     }, RENDER_TIMEOUT_MS);
   });
-  return Promise.race([render, timeout]).finally(() => clearTimeout(timer));
+  const rendering = Promise.resolve().then(render);
+  return Promise.race([rendering, timeout])
+    .finally(() => clearTimeout(timer));
 }
 
 function enqueueRender(render) {
-  const execution = renderQueue.then(render, render);
-  renderQueue = execution.catch(() => undefined);
-  return execution;
+  const state = { cancelled: false, started: false };
+  let queueTimer;
+  let waiting;
+
+  if (scheduledRenders > 0) {
+    waiting = new Promise((_resolve, reject) => {
+      queueTimer = setTimeout(() => {
+        if (state.started)
+          return;
+        state.cancelled = true;
+        reject(new Error(RENDER_QUEUE_TIMEOUT_ERROR));
+      }, RENDER_TIMEOUT_MS);
+    });
+  }
+  scheduledRenders++;
+
+  const execute = () => {
+    state.started = true;
+    if (queueTimer)
+      clearTimeout(queueTimer);
+    if (state.cancelled)
+      return undefined;
+    if (rendererFailed)
+      throw new Error(RENDERER_RESTARTING_ERROR);
+
+    return withRenderTimeout(render).catch(error => {
+      if (error instanceof RenderTimeoutError)
+        failRenderer();
+      throw error;
+    });
+  };
+  const execution = renderQueue.then(execute, execute);
+  const completed = execution.finally(() => {
+    scheduledRenders--;
+  });
+  renderQueue = completed.catch(() => undefined);
+  if (!waiting)
+    return completed;
+  return Promise.race([completed, waiting])
+    .finally(() => clearTimeout(queueTimer));
 }
 
 function base64Encode(file) {
@@ -319,7 +366,7 @@ function base64Encode(file) {
 }
 
 function beginRender() {
-  if (rendererClosing)
+  if (rendererClosing || rendererFailed)
     throw new Error(RENDERER_RESTARTING_ERROR);
   rendererGeneration++;
   activeRenders++;
@@ -332,7 +379,8 @@ function beginRender() {
 function scheduleIdleClose() {
   if (!IS_CHROME_OFFSCREEN ||
       activeRenders !== 0 ||
-      rendererClosing)
+      rendererClosing ||
+      rendererFailed)
     return;
 
   const generation = rendererGeneration;
@@ -352,6 +400,32 @@ function scheduleIdleClose() {
 function finishRender() {
   activeRenders--;
   scheduleIdleClose();
+}
+
+function failRenderer() {
+  if (rendererFailed)
+    return;
+  rendererFailed = true;
+
+  setTimeout(() => {
+    if (!IS_CHROME_OFFSCREEN) {
+      globalThis.location.reload();
+      return;
+    }
+    Promise.resolve(chrome.runtime.sendMessage({
+      type: OFFSCREEN_RESTART_MESSAGE
+    })).then(response => {
+      if (response?.ok === true)
+        return;
+      const message = response?.error ||
+        "The failed renderer could not be replaced.";
+      console.warn(message);
+      globalThis.location.reload();
+    }, error => {
+      console.warn(error.message);
+      globalThis.location.reload();
+    });
+  }, 0);
 }
 
 function isServiceWorkerSender(sender) {
@@ -407,7 +481,7 @@ async function compile2pngDataURL(request) {
     renderSvg(source, display).then(svg => rasterizeSvg(svg, scale, alpha))
   );
   rendering.then(finishRender, finishRender);
-  const png = await withRenderTimeout(rendering);
+  const png = await rendering;
   return {
     code: Communicator.SUCCESS,
     payload: {
