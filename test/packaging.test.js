@@ -11,6 +11,7 @@ const AdmZip = require("adm-zip");
 const { buildTarget } = require("../scripts/build-extension.js");
 const {
   FIXED_MTIME,
+  ZIP_DOS_TIMESTAMP,
   getTargetConfig
 } = require("../scripts/extension-targets.js");
 const { stageTarget } = require("../scripts/stage-extension.js");
@@ -158,19 +159,33 @@ test("target builds produce distinct deterministic ZIPs", t => {
   for (const target of ["firefox", "chrome"]) {
     const result = buildTarget({ root, target, quiet: true });
     first[target] = sha256(result.archivePath);
+    const entries = new AdmZip(result.archivePath).getEntries();
     assert.equal(
       path.basename(result.archivePath),
       `tex-for-gmail-${target}-1.2.3.zip`
     );
     assert.equal(
       JSON.parse(
-        new AdmZip(result.archivePath)
-          .getEntry("manifest.json")
+        entries
+          .find(entry => entry.entryName === "manifest.json")
           .getData()
           .toString("utf8")
       ).target,
       target
     );
+    assert.deepEqual(
+      entries.map(entry => entry.entryName),
+      entries.map(entry => entry.entryName).sort()
+    );
+    for (const entry of entries) {
+      assert.equal(entry.header.fileAttr, 0o644, `${target}: ${entry.entryName}`);
+      assert.equal(entry.header.method, 0, `${target}: ${entry.entryName}`);
+      assert.equal(
+        entry.header.timeval,
+        ZIP_DOS_TIMESTAMP,
+        `${target}: ${entry.entryName}`
+      );
+    }
     assert.doesNotThrow(() =>
       verifyTargetZip({ root, target, quiet: true })
     );

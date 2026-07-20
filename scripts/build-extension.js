@@ -12,6 +12,8 @@ const {
 const { stageTarget } = require("./stage-extension.js");
 const { verifyTargetZip } = require("./verify-zip.js");
 
+const ZIP_STORED_METHOD = 0;
+
 function buildTarget({
   root = path.join(__dirname, ".."),
   target,
@@ -25,6 +27,7 @@ function buildTarget({
   for (const [relative, contents] of files) {
     const entry = archive.addFile(relative, contents, "", 0o644);
     entry.header.timeval = ZIP_DOS_TIMESTAMP;
+    entry.header.method = ZIP_STORED_METHOD;
   }
 
   fs.mkdirSync(path.dirname(config.archivePath), {
