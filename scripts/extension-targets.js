@@ -3,6 +3,12 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  compareNames,
+  isSafeReleaseFile,
+  listTrackedFiles,
+  normalizeRepositoryPath
+} = require("./release-files.js");
 
 const TARGETS = Object.freeze(["firefox", "chrome"]);
 const FIXED_MTIME = new Date("2000-01-01T00:00:00.000Z");
@@ -51,14 +57,6 @@ function requireTarget(target) {
   if (!TARGETS.includes(target))
     fail(`Unknown extension target "${target}". Expected: ${TARGETS.join(", ")}`);
   return target;
-}
-
-function compareNames(left, right) {
-  if (left < right)
-    return -1;
-  if (left > right)
-    return 1;
-  return 0;
 }
 
 function getTargetConfig({
@@ -145,10 +143,54 @@ function walkFiles(directory, {
   return files;
 }
 
-function expectedTargetFiles(config) {
-  const files = walkFiles(config.sourceRoot, {
-    excludedFiles: config.excludedFiles
-  });
+function expectedTargetFiles(config, { trackedFiles } = {}) {
+  const hasGitMetadata = fs.existsSync(path.join(config.root, ".git"));
+  const repositoryFiles = trackedFiles === undefined && hasGitMetadata
+    ? listTrackedFiles({ root: config.root })
+    : trackedFiles;
+  let files;
+
+  if (repositoryFiles === undefined) {
+    files = walkFiles(config.sourceRoot, {
+      excludedFiles: config.excludedFiles
+    });
+    for (const filename of files.keys()) {
+      if (!isSafeReleaseFile(`chrome-extension/${filename}`))
+        files.delete(filename);
+    }
+  } else {
+    const prefix = "chrome-extension/";
+    const manifestPath = `targets/${config.target}/manifest.json`;
+    const normalized = [...new Set(
+      repositoryFiles.map(normalizeRepositoryPath)
+    )].sort(compareNames);
+    if (!normalized.includes(manifestPath))
+      fail(`${config.target} target manifest is not tracked by Git`);
+
+    files = new Map();
+    for (const filename of normalized) {
+      if (!filename.startsWith(prefix))
+        continue;
+      const relative = filename.slice(prefix.length);
+      if (config.excludedFiles.has(relative) ||
+          !isSafeReleaseFile(filename)) {
+        continue;
+      }
+
+      const absolute = path.join(config.root, ...filename.split("/"));
+      let stats;
+      try {
+        stats = fs.lstatSync(absolute);
+      } catch (error) {
+        fail(
+          `Cannot inspect tracked extension file ${filename}: ${error.message}`
+        );
+      }
+      if (stats.isSymbolicLink() || !stats.isFile())
+        fail(`Tracked extension path must be a regular file: ${filename}`);
+      files.set(relative, fs.readFileSync(absolute));
+    }
+  }
   files.set("manifest.json", fs.readFileSync(config.manifestPath));
   return new Map([...files].sort(([left], [right]) =>
     compareNames(left, right)

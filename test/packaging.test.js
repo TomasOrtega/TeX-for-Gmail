@@ -6,10 +6,12 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { execFileSync } = require("node:child_process");
 const AdmZip = require("adm-zip");
 const { buildTarget } = require("../scripts/build-extension.js");
 const {
   FIXED_MTIME,
+  ZIP_DOS_TIMESTAMP,
   getTargetConfig
 } = require("../scripts/extension-targets.js");
 const { stageTarget } = require("../scripts/stage-extension.js");
@@ -157,19 +159,33 @@ test("target builds produce distinct deterministic ZIPs", t => {
   for (const target of ["firefox", "chrome"]) {
     const result = buildTarget({ root, target, quiet: true });
     first[target] = sha256(result.archivePath);
+    const entries = new AdmZip(result.archivePath).getEntries();
     assert.equal(
       path.basename(result.archivePath),
       `tex-for-gmail-${target}-1.2.3.zip`
     );
     assert.equal(
       JSON.parse(
-        new AdmZip(result.archivePath)
-          .getEntry("manifest.json")
+        entries
+          .find(entry => entry.entryName === "manifest.json")
           .getData()
           .toString("utf8")
       ).target,
       target
     );
+    assert.deepEqual(
+      entries.map(entry => entry.entryName),
+      entries.map(entry => entry.entryName).sort()
+    );
+    for (const entry of entries) {
+      assert.equal(entry.header.fileAttr, 0o644, `${target}: ${entry.entryName}`);
+      assert.equal(entry.header.method, 0, `${target}: ${entry.entryName}`);
+      assert.equal(
+        entry.header.timeval,
+        ZIP_DOS_TIMESTAMP,
+        `${target}: ${entry.entryName}`
+      );
+    }
     assert.doesNotThrow(() =>
       verifyTargetZip({ root, target, quiet: true })
     );
@@ -183,5 +199,47 @@ test("target builds produce distinct deterministic ZIPs", t => {
       result.archivePath,
       getTargetConfig({ root, target }).archivePath
     );
+  }
+});
+
+test("target builds exclude untracked, ignored, and sensitive files", t => {
+  const root = createFixture(t);
+  writeFile(root, ".gitignore", "*.log\n.vscode/\nThumbs.db\n");
+  writeFile(root, "chrome-extension/release-debug.log", "debug output\n");
+  writeFile(
+    root,
+    "chrome-extension/.vscode/settings.json",
+    "{\"token\":\"secret\"}\n"
+  );
+  writeFile(root, "chrome-extension/Thumbs.db", "desktop metadata\n");
+  writeFile(root, "chrome-extension/reviewer.pem", "private key\n");
+
+  execFileSync("git", ["init", "--quiet"], { cwd: root });
+  execFileSync("git", [
+    "add",
+    ".gitignore",
+    "package.json",
+    "chrome-extension",
+    "targets"
+  ], { cwd: root });
+
+  for (const target of ["firefox", "chrome"]) {
+    const result = buildTarget({ root, target, quiet: true });
+    const entries = new Set(
+      new AdmZip(result.archivePath).getEntries().map(entry => entry.entryName)
+    );
+    for (const filename of [
+      ".vscode/settings.json",
+      "release-debug.log",
+      "reviewer.pem",
+      "Thumbs.db"
+    ]) {
+      assert.equal(entries.has(filename), false, `${target}: ${filename}`);
+      assert.equal(
+        fs.existsSync(path.join(root, "build", target, filename)),
+        false,
+        `${target} staging: ${filename}`
+      );
+    }
   }
 });

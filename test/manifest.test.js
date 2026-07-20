@@ -2,9 +2,13 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const zlib = require("node:zlib");
+const {
+  discoverCoreSources
+} = require("../scripts/coverage-badge.js");
 
 const root = path.join(__dirname, "..");
 const extensionRoot = path.join(root, "chrome-extension");
@@ -128,6 +132,26 @@ function storedPngRows(filename) {
   const rows = Buffer.concat(blocks);
   assert.ok(rows.equals(zlib.inflateSync(stream)));
   return rows;
+}
+
+function authoredExtensionScripts(repositoryRoot = root) {
+  return discoverCoreSources(repositoryRoot)
+    .map(filename => path.join(repositoryRoot, filename));
+}
+
+function assertNoDynamicCodeEvaluation(repositoryRoot = root) {
+  const projectExtensionRoot = path.join(repositoryRoot, "chrome-extension");
+  for (const filename of authoredExtensionScripts(repositoryRoot)) {
+    const source = fs.readFileSync(filename, "utf8");
+    const relative = path.relative(projectExtensionRoot, filename);
+    assert.doesNotMatch(source, /\beval\b/, relative);
+    assert.doesNotMatch(
+      source,
+      /\b(?:new\s+)?Function\s*\(/,
+      relative
+    );
+    assert.doesNotMatch(source, /\bWebAssembly\b/, relative);
+  }
 }
 
 test("target manifests keep their shared product fields synchronized", () => {
@@ -295,22 +319,38 @@ test("platform hosts load only their required shared scripts", () => {
 });
 
 test("authored extension scripts do not use dynamic code evaluation", () => {
-  const authoredDirectories = ["src"];
-  const authoredScripts = authoredDirectories.flatMap(directory =>
-    fs.readdirSync(path.join(extensionRoot, directory))
-      .filter(filename => filename.endsWith(".js"))
-      .map(filename => path.join(extensionRoot, directory, filename))
-  );
+  assertNoDynamicCodeEvaluation();
+});
 
-  for (const filename of authoredScripts) {
-    const source = fs.readFileSync(filename, "utf8");
-    const relative = path.relative(extensionRoot, filename);
-    assert.doesNotMatch(source, /\beval\s*\(/, relative);
-    assert.doesNotMatch(
-      source,
-      /\b(?:new\s+)?Function\s*\(\s*["']/,
-      relative
-    );
-    assert.doesNotMatch(source, /\bWebAssembly\b/, relative);
+test("dynamic code policy scans nested authored runtime scripts", async t => {
+  const cases = [
+    ["eval", "eval(source);\n"],
+    ["indirect eval", "(0, eval)(source);\n"],
+    ["Function", "Function(source);\n"],
+    ["new Function", "new Function(source);\n"],
+    ["WebAssembly", "WebAssembly.compile(bytes);\n"]
+  ];
+
+  for (const [name, unsafeSource] of cases) {
+    await t.test(name, subtest => {
+      const temporaryRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "tex-gmail-dynamic-code-")
+      );
+      subtest.after(() => {
+        fs.rmSync(temporaryRoot, { force: true, recursive: true });
+      });
+      const sourceRoot = path.join(temporaryRoot, "chrome-extension", "src");
+      fs.mkdirSync(path.join(sourceRoot, "nested"), { recursive: true });
+      fs.writeFileSync(path.join(sourceRoot, "safe.js"), "\"use strict\";\n");
+      fs.writeFileSync(
+        path.join(sourceRoot, "nested", "unsafe.js"),
+        unsafeSource
+      );
+
+      assert.throws(
+        () => assertNoDynamicCodeEvaluation(temporaryRoot),
+        /nested[\\/]unsafe\.js/
+      );
+    });
   }
 });

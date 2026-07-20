@@ -25,10 +25,11 @@ function setTreeTimes(directory) {
 function stageTarget({
   root = path.join(__dirname, ".."),
   target,
+  trackedFiles,
   quiet = false
 }) {
   const config = getTargetConfig({ root, target });
-  const files = expectedTargetFiles(config);
+  const files = expectedTargetFiles(config, { trackedFiles });
   fs.rmSync(config.stageRoot, { force: true, recursive: true });
   fs.mkdirSync(config.stageRoot, { mode: 0o755, recursive: true });
 

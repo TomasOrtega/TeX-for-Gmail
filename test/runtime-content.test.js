@@ -26,6 +26,7 @@ function loadComposeContent(source, options = {}) {
   const requests = [];
   const timers = [];
   let connectCount = 0;
+  let sourceTokenCounter = 0;
 
   function dataKey(name) {
     return name.slice(5).replace(/-([a-z])/g, (_match, letter) =>
@@ -107,8 +108,16 @@ function loadComposeContent(source, options = {}) {
       if (!siblings)
         return;
       const index = siblings.indexOf(this);
-      siblings[index] = node;
-      node.parentNode = this.parentNode;
+      if (node.nodeType === 11) {
+        const replacements = [...node.childNodes];
+        siblings.splice(index, 1, ...replacements);
+        for (const replacement of replacements)
+          replacement.parentNode = this.parentNode;
+        node.childNodes = [];
+      } else {
+        siblings[index] = node;
+        node.parentNode = this.parentNode;
+      }
       this.parentNode = undefined;
     }
   }
@@ -129,6 +138,25 @@ function loadComposeContent(source, options = {}) {
 
     set textContent(value) {
       this.data = value;
+    }
+  }
+
+  class FakeDocumentFragment extends FakeNode {
+    constructor() {
+      super(11);
+    }
+
+    append(...nodes) {
+      for (const node of nodes) {
+        const child = typeof node === "string" ? new FakeText(node) : node;
+        child.remove();
+        child.parentNode = this;
+        this.childNodes.push(child);
+      }
+    }
+
+    get textContent() {
+      return this.childNodes.map(node => node.textContent).join("");
     }
   }
 
@@ -258,14 +286,76 @@ function loadComposeContent(source, options = {}) {
     }
 
     deleteContents() {
-      const node = this.startContainer;
-      const parent = node.parentNode;
-      const after = new FakeText(node.data.slice(this.endOffset));
-      node.data = node.data.slice(0, this.startOffset);
-      this.after = after;
-      parent.insertBefore(after, node.nextSibling);
-      this.endContainer = node;
+      const start = this.startContainer;
+      const end = this.endContainer;
+      if (start === end) {
+        const after = new FakeText(start.data.slice(this.endOffset));
+        start.data = start.data.slice(0, this.startOffset);
+        this.after = after;
+        start.parentNode.insertBefore(after, start.nextSibling);
+      } else {
+        const textNodes = descendants(document.documentElement).filter(
+          node => node.nodeType === 3
+        );
+        const startIndex = textNodes.indexOf(start);
+        const endIndex = textNodes.indexOf(end);
+        start.data = start.data.slice(0, this.startOffset);
+        end.data = end.data.slice(this.endOffset);
+        for (let index = startIndex + 1; index < endIndex; index++)
+          textNodes[index].data = "";
+        this.after = start.nextSibling;
+      }
+      this.endContainer = start;
       this.endOffset = this.startOffset;
+    }
+
+    extractContents() {
+      const fragment = new FakeDocumentFragment();
+      const start = this.startContainer;
+      const end = this.endContainer;
+      if (start === end) {
+        fragment.append(new FakeText(
+          start.data.slice(this.startOffset, this.endOffset)
+        ));
+        this.deleteContents();
+        return fragment;
+      }
+
+      if (start.parentNode === end.parentNode) {
+        const parent = start.parentNode;
+        const siblings = [...parent.childNodes];
+        const startIndex = siblings.indexOf(start);
+        const endIndex = siblings.indexOf(end);
+        fragment.append(new FakeText(start.data.slice(this.startOffset)));
+        for (const node of siblings.slice(startIndex + 1, endIndex))
+          fragment.append(node);
+        fragment.append(new FakeText(end.data.slice(0, this.endOffset)));
+        start.data = start.data.slice(0, this.startOffset);
+        end.data = end.data.slice(this.endOffset);
+        this.after = end;
+        this.endContainer = start;
+        this.endOffset = this.startOffset;
+        return fragment;
+      }
+
+      const textNodes = descendants(document.documentElement).filter(
+        node => node.nodeType === 3
+      );
+      const startIndex = textNodes.indexOf(start);
+      const endIndex = textNodes.indexOf(end);
+      const selected = textNodes
+        .slice(startIndex, endIndex + 1)
+        .map((node, index, nodes) => {
+          const from = index === 0 ? this.startOffset : 0;
+          const to = index === nodes.length - 1
+            ? this.endOffset
+            : node.data.length;
+          return node.data.slice(from, to);
+        })
+        .join("");
+      fragment.append(new FakeText(selected));
+      this.deleteContents();
+      return fragment;
     }
 
     insertNode(node) {
@@ -491,6 +581,14 @@ function loadComposeContent(source, options = {}) {
         });
       }
     },
+    crypto: {
+      randomUUID() {
+        sourceTokenCounter++;
+        return `00000000-0000-4000-8000-${
+          sourceTokenCounter.toString(16).padStart(12, "0")
+        }`;
+      }
+    },
     document,
     Image: FakeImage,
     InputEvent: class {
@@ -555,7 +653,14 @@ function loadComposeContent(source, options = {}) {
       scheduleToolbarSync: typeof scheduleToolbarSync === "undefined"
         ? undefined : scheduleToolbarSync,
       formattingAnchor: typeof formattingAnchor === "undefined"
-        ? undefined : formattingAnchor
+        ? undefined : formattingAnchor,
+      markRenderedImage: typeof markRenderedImage === "undefined"
+        ? undefined : markRenderedImage,
+      rememberedRenderedSourceCount:
+        typeof renderedSourcesByToken === "undefined"
+          ? undefined : () => renderedSourcesByToken.size,
+      sourceForRenderedImage: typeof sourceForRenderedImage === "undefined"
+        ? undefined : sourceForRenderedImage
     })`, context),
     bold,
     bootstrapMessages,
@@ -629,6 +734,11 @@ test("Gmail toolbar renders delimited math and restores it before deletion", asy
   assert.ok(image);
   assert.equal(image.alt, "Rendered math expression");
   assert.equal(image.dataset.texForGmailSource, undefined);
+  assert.match(
+    image.dataset.texForGmailSourceToken,
+    /^[0-9a-f-]{36}$/
+  );
+  assert.notEqual(image.dataset.texForGmailSourceToken, "$x^2$");
   assert.equal(image.contentEditable, "false");
 
   runtime.selection.addRange(runtime.makeRange(image.nextSibling, 0));
@@ -676,6 +786,268 @@ test("Gmail toolbar renders numeric dollar-delimited expressions", async () => {
     1
   );
 });
+
+test("Gmail toolbar renders math split across inline formatting", async () => {
+  const runtime = loadComposeContent("");
+  const strong = runtime.createElement("strong");
+  strong.append("^2 + y");
+  runtime.editor.append("Before $x", strong, "$ and $z$ after.");
+
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 2 }
+  );
+  assert.deepEqual(
+    runtime.requests.map(request => request.source),
+    ["x^2 + y", "z"]
+  );
+
+  const images = runtime.editor.querySelectorAll(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  assert.equal(images.length, 2);
+  runtime.editor.dispatchEvent({
+    preventDefault() {},
+    target: images[0],
+    type: "dblclick"
+  });
+  assert.match(runtime.editor.textContent, /\$x\^2 \+ y\$/);
+});
+
+test("Gmail toolbar restores cross-node markup after a render failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const strong = runtime.createElement("strong");
+    const emphasis = runtime.createElement("em");
+    strong.append("^2");
+    emphasis.append(" + y");
+    runtime.editor.append("Before $x", strong, emphasis, "$ after.");
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(runtime.editor.textContent, "Before $x^2 + y$ after.");
+    assert.equal(runtime.editor.querySelector("strong").textContent, "^2");
+    assert.equal(runtime.editor.querySelector("em").textContent, " + y");
+    assert.equal(strong.parentNode, runtime.editor);
+    assert.equal(strong.nextSibling, emphasis);
+    assert.equal(emphasis.parentNode, runtime.editor);
+  });
+
+test("Gmail toolbar restores Gmail line markup after a render failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const line = runtime.createElement("div");
+    const strong = runtime.createElement("strong");
+    const lineBreak = runtime.createElement("br");
+    const emphasis = runtime.createElement("em");
+    strong.append("^2");
+    emphasis.append(" + y");
+    line.append(strong, lineBreak, emphasis);
+    runtime.editor.append("Before $$x", line, "$$ after.");
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(runtime.editor.textContent, "Before $$x^2 + y$$ after.");
+    assert.equal(line.parentNode, runtime.editor);
+    assert.deepEqual(line.childNodes, [strong, lineBreak, emphasis]);
+    assert.equal(strong.textContent, "^2");
+    assert.equal(emphasis.textContent, " + y");
+  });
+
+test("Gmail toolbar renders multiline AMS math across Gmail line markup",
+  async () => {
+    const runtime = loadComposeContent("");
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const lineBreak = runtime.createElement("br");
+    firstLine.append(
+      String.raw`x &= 1 \\`,
+      lineBreak,
+      String.raw`y &= 2`
+    );
+    secondLine.append(String.raw`\end{aligned}$$`);
+    runtime.editor.append(
+      String.raw`$$\begin{aligned}`,
+      firstLine,
+      secondLine
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    const original = [
+      String.raw`$$\begin{aligned}`,
+      String.raw`x &= 1 \\`,
+      String.raw`y &= 2`,
+      String.raw`\end{aligned}$$`
+    ].join("\n");
+    assert.deepEqual(runtime.requests.map(request => ({
+      display: request.display,
+      source: request.source
+    })), [{
+      display: true,
+      source: original.slice(2, -2)
+    }]);
+    const image = runtime.editor.querySelector(
+      'img[data-tex-for-gmail-rendered="1"]'
+    );
+    assert.equal(
+      image.className,
+      "tex-for-gmail-image tex-for-gmail-display"
+    );
+    runtime.editor.dispatchEvent({
+      preventDefault() {},
+      target: image,
+      type: "dblclick"
+    });
+    assert.equal(runtime.editor.textContent, original);
+  });
+
+test("Gmail toolbar does not join math across headings", async () => {
+  const runtime = loadComposeContent("");
+  const heading = runtime.createElement("h2");
+  heading.append("$inside$");
+  runtime.editor.append("$outside", heading, "outside$");
+
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 1 }
+  );
+  assert.deepEqual(runtime.requests.map(request => request.source), ["inside"]);
+  assert.equal(runtime.editor.textContent, "$outsideoutside$");
+  assert.ok(
+    heading.querySelector('img[data-tex-for-gmail-rendered="1"]')
+  );
+});
+
+test("Gmail toolbar does not join math across table cells or rows",
+  async () => {
+    const runtime = loadComposeContent("");
+    const table = runtime.createElement("table");
+    const body = runtime.createElement("tbody");
+    const firstRow = runtime.createElement("tr");
+    const firstCell = runtime.createElement("td");
+    const secondCell = runtime.createElement("td");
+    const secondRow = runtime.createElement("tr");
+    const thirdCell = runtime.createElement("td");
+    firstCell.append("$left");
+    secondCell.append("right$");
+    thirdCell.append("$inside$");
+    firstRow.append(firstCell, secondCell);
+    secondRow.append(thirdCell);
+    body.append(firstRow, secondRow);
+    table.append(body);
+    runtime.editor.append(table);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    assert.deepEqual(runtime.requests.map(request => request.source), ["inside"]);
+    assert.equal(firstCell.textContent, "$left");
+    assert.equal(secondCell.textContent, "right$");
+    assert.ok(
+      thirdCell.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
+  });
+
+test("Gmail toolbar does not join math across list items or paragraphs",
+  async () => {
+    const runtime = loadComposeContent("");
+    const list = runtime.createElement("ul");
+    const firstItem = runtime.createElement("li");
+    const secondItem = runtime.createElement("li");
+    const thirdItem = runtime.createElement("li");
+    const firstParagraph = runtime.createElement("p");
+    const secondParagraph = runtime.createElement("p");
+    const thirdParagraph = runtime.createElement("p");
+    firstItem.append("$$list");
+    secondItem.append("cross$$");
+    thirdItem.append("$$inside-list$$");
+    firstParagraph.append("$$paragraph");
+    secondParagraph.append("cross$$");
+    thirdParagraph.append("$$inside-paragraph$$");
+    list.append(firstItem, secondItem, thirdItem);
+    runtime.editor.append(
+      list,
+      firstParagraph,
+      secondParagraph,
+      thirdParagraph
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 2 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["inside-list", "inside-paragraph"]
+    );
+    assert.equal(firstItem.textContent, "$$list");
+    assert.equal(secondItem.textContent, "cross$$");
+    assert.ok(
+      thirdItem.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
+    assert.equal(firstParagraph.textContent, "$$paragraph");
+    assert.equal(secondParagraph.textContent, "cross$$");
+    assert.ok(
+      thirdParagraph.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
+  });
+
+test("Gmail toolbar keeps unsafe content outside logical math streams",
+  async () => {
+    const runtime = loadComposeContent("");
+    const quote = runtime.createElement("blockquote");
+    quote.append("$quoted$");
+    const gmailQuote = runtime.createElement("span");
+    gmailQuote.className = "gmail_quote";
+    gmailQuote.append("$gmail$");
+    const locked = runtime.createElement("span");
+    locked.setAttribute("contenteditable", "false");
+    locked.append("$locked$");
+    const pending = runtime.createElement("span");
+    pending.dataset.texForGmailPending = "1";
+    pending.append("$pending$");
+    const rendered = runtime.createElement("span");
+    rendered.dataset.texForGmailRendered = "1";
+    rendered.append("$rendered$");
+    const atomic = runtime.createElement("img");
+    runtime.editor.append(
+      "$first$",
+      quote,
+      gmailQuote,
+      locked,
+      pending,
+      rendered,
+      String.raw`\(`,
+      atomic,
+      String.raw`crossed\)`,
+      "$last$"
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 2 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["first", "last"]
+    );
+  });
 
 test("Gmail toolbar keeps changed pending math editable", async () => {
   let resolveRender;
@@ -829,10 +1201,17 @@ test("Gmail toolbar leaves excess formulas for the next batch", async () => {
     { ok: false, rendered: 50 }
   );
   assert.equal(runtime.requests.length, 50);
+  assert.equal(runtime.requests[0].source, "x_0");
+  assert.equal(runtime.requests.at(-1).source, "x_49");
   assert.match(
     runtime.document.querySelector("#tex-for-gmail-status").textContent,
     /Batch limit reached/
   );
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 1 }
+  );
+  assert.equal(runtime.requests.at(-1).source, "x_50");
 });
 
 test("Gmail toolbar recovers one restarting renderer and rejects bad images", async () => {
@@ -1018,6 +1397,95 @@ test("Gmail toolbar restores formulas from every editing boundary", async () => 
   const ordinaryDelete = deletion("deleteContentBackward");
   atStart.editor.dispatchEvent(ordinaryDelete);
   assert.equal(ordinaryDelete.defaultPrevented, false);
+});
+
+test("Gmail toolbar restores formulas after rendered images are cloned", async () => {
+  function replaceWithClone(runtime, image) {
+    const clone = runtime.createElement("img");
+    Object.assign(clone.dataset, image.dataset);
+    image.replaceWith(clone);
+    return clone;
+  }
+
+  const doubleClick = loadComposeContent("$x^2$");
+  await doubleClick.api.renderAllMathInEditor(doubleClick.editor);
+  const original = doubleClick.editor.querySelector(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  const clone = replaceWithClone(doubleClick, original);
+  const click = {
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    target: clone,
+    type: "dblclick"
+  };
+  doubleClick.editor.dispatchEvent(click);
+  assert.equal(click.defaultPrevented, true);
+  assert.equal(doubleClick.editor.textContent, "$x^2$");
+
+  const deletion = loadComposeContent("$y$");
+  await deletion.api.renderAllMathInEditor(deletion.editor);
+  const deletionOriginal = deletion.editor.querySelector(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  const deletionClone = replaceWithClone(deletion, deletionOriginal);
+  const offset = deletion.editor.childNodes.indexOf(deletionClone);
+  deletion.selection.addRange(
+    deletion.makeElementRange(deletion.editor, offset + 1)
+  );
+  const backwards = {
+    defaultPrevented: false,
+    inputType: "deleteContentBackward",
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    type: "beforeinput"
+  };
+  deletion.editor.dispatchEvent(backwards);
+  assert.equal(backwards.defaultPrevented, true);
+  assert.equal(deletion.editor.textContent, "$y$");
+});
+
+test("Gmail toolbar validates and bounds remembered formula sources", async () => {
+  const runtime = loadComposeContent("");
+  const first = runtime.createElement("img");
+  runtime.api.markRenderedImage(first, "$x_0$");
+  const firstToken = first.dataset.texForGmailSourceToken;
+
+  const malformed = runtime.createElement("img");
+  malformed.dataset.texForGmailRendered = "1";
+  malformed.dataset.texForGmailSourceToken = "__proto__";
+  assert.equal(runtime.api.sourceForRenderedImage(malformed), undefined);
+
+  const unknown = runtime.createElement("img");
+  unknown.dataset.texForGmailRendered = "1";
+  unknown.dataset.texForGmailSourceToken =
+    "ffffffff-ffff-4fff-bfff-ffffffffffff";
+  assert.equal(runtime.api.sourceForRenderedImage(unknown), undefined);
+
+  assert.throws(
+    () => runtime.api.markRenderedImage(
+      runtime.createElement("img"),
+      "x".repeat(latex.MAX_SOURCE_LENGTH + 1)
+    ),
+    /size limit/
+  );
+
+  for (let index = 1; index <= 500; index++) {
+    runtime.api.markRenderedImage(
+      runtime.createElement("img"),
+      `$x_${index}$`
+    );
+  }
+  assert.equal(runtime.api.rememberedRenderedSourceCount(), 500);
+  assert.equal(runtime.api.sourceForRenderedImage(first), "$x_0$");
+
+  const evictedClone = runtime.createElement("img");
+  evictedClone.dataset.texForGmailRendered = "1";
+  evictedClone.dataset.texForGmailSourceToken = firstToken;
+  assert.equal(runtime.api.sourceForRenderedImage(evictedClone), undefined);
 });
 
 test("Gmail toolbar activation tracks dynamically added compose windows", async () => {

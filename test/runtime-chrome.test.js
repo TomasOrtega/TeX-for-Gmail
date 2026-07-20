@@ -145,6 +145,22 @@ function requestClose(runtime, generation = 1, sender = {
   });
 }
 
+function requestRestart(runtime, sender = {
+  id: "tex-for-gmail-test",
+  url: "chrome-extension://test/src/chrome-offscreen.html"
+}) {
+  const listener = runtime.onMessage.listeners[1];
+  return new Promise(resolve => {
+    const result = listener({
+      type: "tex-for-gmail:restart-renderer"
+    }, sender, resolve);
+    if (result === undefined)
+      resolve(undefined);
+    else
+      assert.equal(result, true);
+  });
+}
+
 test("Chrome creates one offscreen renderer for concurrent requests", async () => {
   let resolveCreation;
   const creation = new Promise(resolve => {
@@ -318,6 +334,60 @@ test("Chrome skips closing when the offscreen generation is no longer idle", asy
     ok: false
   });
   assert.equal(runtime.closeCalls.length, 0);
+});
+
+test("Chrome force-closes an authenticated failed renderer", async () => {
+  const runtime = loadChromeServiceWorker();
+
+  assert.equal(await requestRestart(runtime, {
+    id: "another-extension",
+    url: "chrome-extension://test/src/chrome-offscreen.html"
+  }), undefined);
+  assert.deepEqual({ ...await requestRestart(runtime) }, { ok: true });
+  assert.equal(runtime.closeCalls.length, 1);
+  assert.deepEqual(runtime.sentMessages, []);
+
+  assert.deepEqual({ ...await requestRenderer(runtime) }, { ok: true });
+  assert.equal(runtime.createCalls.length, 1);
+});
+
+test("Chrome reports a failed forced renderer close", async () => {
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      return Promise.reject(new Error("forced close failed"));
+    }
+  });
+
+  assert.deepEqual({ ...await requestRestart(runtime) }, {
+    error: "forced close failed",
+    ok: false
+  });
+  assert.equal(runtime.closeCalls.length, 1);
+  assert.deepEqual(runtime.warnings, ["forced close failed"]);
+});
+
+test("Chrome serializes an immediate retry behind renderer replacement", async () => {
+  let releaseClose;
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      return new Promise(resolve => {
+        releaseClose = resolve;
+      });
+    }
+  });
+
+  const restarting = requestRestart(runtime);
+  const ensuring = requestRenderer(runtime);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(runtime.closeCalls.length, 1);
+  assert.equal(runtime.createCalls.length, 0);
+  assert.equal(runtime.getContextsCalls(), 0);
+
+  releaseClose();
+  assert.deepEqual({ ...await restarting }, { ok: true });
+  assert.deepEqual({ ...await ensuring }, { ok: true });
+  assert.equal(runtime.createCalls.length, 1);
 });
 
 test("Chrome serializes renderer creation behind an in-progress close", async () => {

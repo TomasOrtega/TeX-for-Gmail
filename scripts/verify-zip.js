@@ -134,11 +134,12 @@ function verifyArchive(
 function verifyTargetZip({
   root = path.join(__dirname, ".."),
   target,
+  trackedFiles,
   archivePath,
   quiet = false
 } = {}) {
   const config = getTargetConfig({ root, target });
-  const expectedFiles = expectedTargetFiles(config);
+  const expectedFiles = expectedTargetFiles(config, { trackedFiles });
   verifyFileTree(
     expectedFiles,
     config.stageRoot,

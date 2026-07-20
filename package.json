@@ -41,7 +41,7 @@
     "stage:firefox": "node scripts/stage-extension.js firefox",
     "smoke:browser": "node scripts/smoke-browser.js",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"chrome-extension/src/*.js\" --test-coverage-lines=100 --test-coverage-branches=60 --test-coverage-functions=65 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"chrome-extension/src/**/*.js\" --test-coverage-lines=100 --test-coverage-branches=60 --test-coverage-functions=65 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
     "validate": "npm run vendor:mathjax:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run coverage:check && npm run lint && npm run build && npm run verify:zip && npm run smoke:browser && npm run audit",
     "vendor:mathjax": "node scripts/vendor-mathjax.js",
     "vendor:mathjax:check": "node scripts/vendor-mathjax.js --check",

@@ -11,6 +11,13 @@ const {
   TARGETS,
   ZIP_DOS_TIMESTAMP
 } = require("./extension-targets.js");
+const {
+  compareNames,
+  isSafeReleaseFile,
+  listTrackedFiles,
+  normalizeRepositoryPath,
+  runGit
+} = require("./release-files.js");
 
 const ZIP_STORED_METHOD = 0;
 const SOURCE_FILES = Object.freeze(new Set([
@@ -55,6 +62,7 @@ const REQUIRED_SOURCE_FILES = Object.freeze([
   "scripts/extension-targets.js",
   "scripts/generate-icons.js",
   "scripts/lint-extension.js",
+  "scripts/release-files.js",
   "scripts/smoke-browser.js",
   "scripts/stage-extension.js",
   "scripts/update-artifact-lock.js",
@@ -65,93 +73,21 @@ const REQUIRED_SOURCE_FILES = Object.freeze([
   "targets/chrome/manifest.json",
   "targets/firefox/manifest.json"
 ]);
-const FORBIDDEN_SEGMENTS = Object.freeze(new Set([
-  ".git",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules"
-]));
-const SENSITIVE_BASENAMES = Object.freeze(new Set([
-  ".env",
-  ".npmrc",
-  "id_dsa",
-  "id_ed25519",
-  "id_rsa"
-]));
-const SENSITIVE_EXTENSIONS = Object.freeze(new Set([
-  ".key",
-  ".p12",
-  ".pem",
-  ".pfx"
-]));
-
 function fail(message) {
   throw new Error(message);
 }
 
-function compareNames(left, right) {
-  if (left < right)
-    return -1;
-  if (left > right)
-    return 1;
-  return 0;
-}
-
-function runGit(root, args) {
-  return execFileSync("git", args, {
-    cwd: root,
-    encoding: null,
-    maxBuffer: 32 * 1024 * 1024
-  });
-}
-
-function normalizeTrackedPath(filename) {
-  const segments = typeof filename === "string" ? filename.split("/") : [];
-  if (typeof filename !== "string" ||
-      filename.length === 0 ||
-      filename.includes("\0") ||
-      filename.includes("\\") ||
-      path.posix.isAbsolute(filename) ||
-      path.posix.normalize(filename) !== filename ||
-      segments.some(segment => segment === "." || segment === "..")) {
-    fail(`Git reported an unsafe path: ${JSON.stringify(filename)}`);
-  }
-  return filename;
-}
-
-function listTrackedFiles({
-  root = path.join(__dirname, ".."),
-  git = runGit
-} = {}) {
-  const output = git(root, ["ls-files", "-z", "--cached"]);
-  const buffer = Buffer.isBuffer(output) ? output : Buffer.from(output);
-  const filenames = buffer.toString("utf8").split("\0");
-  if (filenames.at(-1) === "")
-    filenames.pop();
-  return filenames.map(normalizeTrackedPath).sort(compareNames);
-}
-
-function hasSensitiveName(filename) {
-  const basename = path.posix.basename(filename);
-  return SENSITIVE_BASENAMES.has(basename) ||
-    basename.startsWith(".env.") ||
-    SENSITIVE_EXTENSIONS.has(path.posix.extname(basename).toLowerCase());
-}
-
 function isAllowedSourceFile(filename) {
-  const normalized = normalizeTrackedPath(filename);
-  if (normalized.split("/").some(part => FORBIDDEN_SEGMENTS.has(part)) ||
-      hasSensitiveName(normalized)) {
+  const normalized = normalizeRepositoryPath(filename);
+  if (!isSafeReleaseFile(normalized))
     return false;
-  }
   return SOURCE_FILES.has(normalized) ||
     SOURCE_DIRECTORIES.some(directory => normalized.startsWith(directory));
 }
 
 function selectSourceFiles(trackedFiles) {
   const selected = [...new Set(
-    trackedFiles.map(normalizeTrackedPath).filter(isAllowedSourceFile)
+    trackedFiles.map(normalizeRepositoryPath).filter(isAllowedSourceFile)
   )].sort(compareNames);
   const selectedSet = new Set(selected);
   const missing = REQUIRED_SOURCE_FILES.filter(
@@ -333,12 +269,20 @@ function buildRelease({
     assertCleanWorktree({ root, git });
   }
 
+  const releaseFiles = trackedFiles === undefined
+    ? listTrackedFiles({ root, git })
+    : trackedFiles;
   const targetResults = TARGETS.map(target =>
-    buildTargetFn({ root, target, quiet: true })
+    buildTargetFn({
+      root,
+      target,
+      quiet: true,
+      trackedFiles: releaseFiles
+    })
   );
   const source = buildSourceArchive({
     root,
-    trackedFiles,
+    trackedFiles: releaseFiles,
     git,
     quiet: true
   });

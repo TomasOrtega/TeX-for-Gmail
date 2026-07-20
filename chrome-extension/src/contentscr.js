@@ -14,13 +14,79 @@ const GMAIL_EDITOR_SELECTOR =
 const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
 const RENDERED_IMAGE_SELECTOR = 'img[data-tex-for-gmail-rendered="1"]';
 const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
+const MATH_EXCLUDED_SELECTOR =
+  '[contenteditable="false"], blockquote, .gmail_quote, ' +
+  '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
+const RENDERED_SOURCE_TOKEN_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const MATH_LINE_BREAK_TAGS = new Set(["DIV"]);
+const MATH_STREAM_BOUNDARY_TAGS = new Set([
+  "ADDRESS",
+  "ARTICLE",
+  "ASIDE",
+  "CAPTION",
+  "DD",
+  "DETAILS",
+  "DIALOG",
+  "DL",
+  "DT",
+  "FIELDSET",
+  "FIGCAPTION",
+  "FIGURE",
+  "FOOTER",
+  "FORM",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HEADER",
+  "HGROUP",
+  "LI",
+  "MAIN",
+  "MENU",
+  "NAV",
+  "OL",
+  "P",
+  "PRE",
+  "SECTION",
+  "SUMMARY",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TFOOT",
+  "TH",
+  "THEAD",
+  "TR",
+  "UL"
+]);
+const MATH_STREAM_BARRIER_TAGS = new Set([
+  "AREA",
+  "AUDIO",
+  "BUTTON",
+  "CANVAS",
+  "EMBED",
+  "HR",
+  "IFRAME",
+  "IMG",
+  "INPUT",
+  "OBJECT",
+  "SCRIPT",
+  "SELECT",
+  "STYLE",
+  "TEXTAREA",
+  "VIDEO"
+]);
 const MAX_BATCH_EXPRESSIONS = 50;
+const MAX_REMEMBERED_RENDERED_SOURCES = 500;
 let rendererConnection;
 let statusTimer;
 let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
 const renderedSources = new WeakMap();
+const renderedSourcesByToken = new Map();
 
 async function getCommunicator() {
   if (rendererConnection)
@@ -168,9 +234,37 @@ function showStatus(message, state = "progress") {
   }
 }
 
+function rememberRenderedSource(token, source) {
+  while (renderedSourcesByToken.size >= MAX_REMEMBERED_RENDERED_SOURCES) {
+    const oldest = renderedSourcesByToken.keys().next().value;
+    renderedSourcesByToken.delete(oldest);
+  }
+  renderedSourcesByToken.set(token, source);
+}
+
+function newRenderedSourceToken() {
+  let token;
+  do {
+    token = crypto.randomUUID();
+  } while (renderedSourcesByToken.has(token));
+  return token;
+}
+
+function validRenderedSource(source) {
+  return typeof source === "string" &&
+    source.length > 0 &&
+    source.length <= TeXForGmail.MAX_SOURCE_LENGTH;
+}
+
 function markRenderedImage(image, original) {
+  if (!validRenderedSource(original))
+    throw new Error("The formula source is invalid or exceeds the size limit.");
+
+  const token = newRenderedSourceToken();
   renderedSources.set(image, original);
+  rememberRenderedSource(token, original);
   image.dataset.texForGmailRendered = "1";
+  image.dataset.texForGmailSourceToken = token;
   image.dataset.texForGmailVersion = "1";
 }
 
@@ -217,67 +311,146 @@ function isRenderedMathImage(node) {
 }
 
 function sourceForRenderedImage(image) {
-  const source = renderedSources.get(image);
-  if (typeof source !== "string" ||
-      source.length === 0 ||
-      source.length > TeXForGmail.MAX_SOURCE_LENGTH)
+  let source = renderedSources.get(image);
+  if (validRenderedSource(source))
+    return source;
+
+  const token = image?.dataset?.texForGmailSourceToken;
+  if (typeof token !== "string" ||
+      !RENDERED_SOURCE_TOKEN_PATTERN.test(token))
     return undefined;
+  source = renderedSourcesByToken.get(token);
+  if (!validRenderedSource(source))
+    return undefined;
+
+  renderedSources.set(image, source);
+  renderedSourcesByToken.delete(token);
+  renderedSourcesByToken.set(token, source);
   return source;
 }
 
-function isMathTextNode(node, editor) {
-  const parent = node.parentElement;
-  return typeof node.data === "string" &&
-    node.data.length > 0 &&
-    parent &&
-    editor.contains(parent) &&
-    !parent.closest(
-      '[contenteditable="false"], blockquote, .gmail_quote, ' +
-      '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]'
-    );
+function logicalMathStreams(editor) {
+  const streams = [];
+  let stream = { segments: [], text: "" };
+
+  function finishStream() {
+    if (stream.text)
+      streams.push(stream);
+    stream = { segments: [], text: "" };
+  }
+
+  function appendText(node) {
+    if (!node.data)
+      return;
+    const start = stream.text.length;
+    stream.text += node.data;
+    stream.segments.push({
+      end: stream.text.length,
+      node,
+      start
+    });
+  }
+
+  function appendStructuralLineBreak() {
+    if (stream.text && !stream.text.endsWith("\n"))
+      stream.text += "\n";
+  }
+
+  function visit(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendText(node);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE)
+      return;
+
+    if (node.matches?.(MATH_EXCLUDED_SELECTOR)) {
+      finishStream();
+      return;
+    }
+    if (node.tagName === "BR") {
+      stream.text += "\n";
+      return;
+    }
+    if (node !== editor && MATH_STREAM_BARRIER_TAGS.has(node.tagName)) {
+      finishStream();
+      return;
+    }
+    if (node !== editor && MATH_STREAM_BOUNDARY_TAGS.has(node.tagName)) {
+      finishStream();
+      for (const child of node.childNodes)
+        visit(child);
+      finishStream();
+      return;
+    }
+
+    const breaksLine = node !== editor &&
+      MATH_LINE_BREAK_TAGS.has(node.tagName);
+    if (breaksLine)
+      appendStructuralLineBreak();
+    for (const child of node.childNodes)
+      visit(child);
+    if (breaksLine)
+      appendStructuralLineBreak();
+  }
+
+  visit(editor);
+  finishStream();
+  return streams;
+}
+
+function expressionBoundary(stream, index, end) {
+  const character = end ? index - 1 : index;
+  const segment = stream.segments.find(candidate =>
+    candidate.start <= character && character < candidate.end
+  );
+  if (!segment)
+    return undefined;
+  return {
+    node: segment.node,
+    offset: index - segment.start
+  };
 }
 
 function delimitedMathInEditor(editor) {
   const expressions = [];
-  const walker = document.createTreeWalker(
-    editor,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        return isMathTextNode(node, editor)
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT;
-      }
-    }
-  );
-  let node;
-  while ((node = walker.nextNode())) {
-    const matches = TeXForGmail.findDelimitedMath(node.data);
-    for (let index = matches.length - 1; index >= 0; index--) {
+  for (const stream of logicalMathStreams(editor)) {
+    const matches = TeXForGmail.findDelimitedMath(stream.text);
+    for (const match of matches) {
       if (expressions.length === MAX_BATCH_EXPRESSIONS)
         return { expressions, truncated: true };
-      expressions.push({ ...matches[index], node });
+      const start = expressionBoundary(stream, match.start, false);
+      const end = expressionBoundary(stream, match.end, true);
+      if (!start || !end)
+        continue;
+      expressions.push({
+        ...match,
+        endNode: end.node,
+        endOffset: end.offset,
+        startNode: start.node,
+        startOffset: start.offset
+      });
     }
   }
   return { expressions, truncated: false };
 }
 
 function pendingMathExpression(expression, editor) {
-  if (!expression.node.isConnected ||
-      !editor.contains(expression.node) ||
-      expression.node.data.slice(expression.start, expression.end) !==
-        expression.text)
+  if (!expression.startNode.isConnected ||
+      !expression.endNode.isConnected ||
+      !editor.contains(expression.startNode) ||
+      !editor.contains(expression.endNode))
     return undefined;
 
   const pending = document.createElement("span");
   pending.dataset.texForGmailPending = "1";
   pending.textContent = expression.text;
   const range = document.createRange();
-  range.setStart(expression.node, expression.start);
-  range.setEnd(expression.node, expression.end);
-  range.deleteContents();
+  range.setStart(expression.startNode, expression.startOffset);
+  range.setEnd(expression.endNode, expression.endOffset);
+  const original = range.extractContents();
   range.insertNode(pending);
-  return pending;
+  return { original, pending };
 }
 
 async function renderAllMathInEditor(editor) {
@@ -296,11 +469,15 @@ async function renderAllMathInEditor(editor) {
   let rendered = 0;
   try {
     showStatus("Rendering math…");
-    for (const expression of expressions) {
-      const pending = pendingMathExpression(expression, editor);
-      if (!pending)
-        continue;
+    const pendingExpressions = [];
+    for (let index = expressions.length - 1; index >= 0; index--) {
+      const expression = expressions[index];
+      const pendingExpression = pendingMathExpression(expression, editor);
+      if (pendingExpression)
+        pendingExpressions.unshift({ expression, ...pendingExpression });
+    }
 
+    for (const { expression, original, pending } of pendingExpressions) {
       try {
         const normalized = TeXForGmail.normalizeInput(expression.text);
         const dataUrl = await compileWithRendererSession(
@@ -328,7 +505,7 @@ async function renderAllMathInEditor(editor) {
         if (pending.isConnected &&
             editor.contains(pending) &&
             pending.textContent === expression.text)
-          pending.replaceWith(document.createTextNode(expression.text));
+          pending.replaceWith(original);
         else
           pending.removeAttribute("data-tex-for-gmail-pending");
       }

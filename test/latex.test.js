@@ -107,3 +107,26 @@ test("findDelimitedMath does not treat common dollar amounts as math", () => {
     text: "$x + y$"
   }]);
 });
+
+test("findDelimitedMath scans repeated unmatched openers linearly", () => {
+  const input = String.raw`\(`.repeat(2000);
+  const originalStartsWith = String.prototype.startsWith;
+  let startsWithCalls = 0;
+  let expressions;
+
+  String.prototype.startsWith = function (...args) {
+    startsWithCalls++;
+    return Reflect.apply(originalStartsWith, this, args);
+  };
+  try {
+    expressions = latex.findDelimitedMath(input);
+  } finally {
+    String.prototype.startsWith = originalStartsWith;
+  }
+
+  assert.deepEqual(expressions, []);
+  assert.ok(
+    startsWithCalls <= input.length * 10,
+    `${startsWithCalls} delimiter checks for ${input.length} characters`
+  );
+});

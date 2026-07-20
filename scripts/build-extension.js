@@ -12,18 +12,22 @@ const {
 const { stageTarget } = require("./stage-extension.js");
 const { verifyTargetZip } = require("./verify-zip.js");
 
+const ZIP_STORED_METHOD = 0;
+
 function buildTarget({
   root = path.join(__dirname, ".."),
   target,
+  trackedFiles,
   quiet = false
 }) {
-  const config = stageTarget({ root, target, quiet: true });
+  const config = stageTarget({ root, target, trackedFiles, quiet: true });
   const files = walkFiles(config.stageRoot);
   const archive = new AdmZip({ noSort: true });
 
   for (const [relative, contents] of files) {
     const entry = archive.addFile(relative, contents, "", 0o644);
     entry.header.timeval = ZIP_DOS_TIMESTAMP;
+    entry.header.method = ZIP_STORED_METHOD;
   }
 
   fs.mkdirSync(path.dirname(config.archivePath), {
@@ -35,6 +39,7 @@ function buildTarget({
   const result = verifyTargetZip({
     root,
     target,
+    trackedFiles,
     archivePath: config.archivePath,
     quiet: true
   });

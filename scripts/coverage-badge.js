@@ -10,13 +10,21 @@ const coreDirectories = [
   "chrome-extension/src"
 ];
 
-function discoverCoreSources() {
-  return coreDirectories.flatMap(directory => {
-    const absoluteDirectory = path.join(root, directory);
+function discoverCoreSources(rootDirectory = root) {
+  function discover(directory) {
+    const absoluteDirectory = path.join(rootDirectory, directory);
     return fs.readdirSync(absoluteDirectory, { withFileTypes: true })
-      .filter(entry => entry.isFile() && entry.name.endsWith(".js"))
-      .map(entry => `${directory}/${entry.name}`);
-  }).sort();
+      .flatMap(entry => {
+        const relative = `${directory}/${entry.name}`;
+        if (entry.isDirectory())
+          return discover(relative);
+        return entry.isFile() && entry.name.endsWith(".js")
+          ? [relative]
+          : [];
+      });
+  }
+
+  return coreDirectories.flatMap(discover).sort();
 }
 
 function normalizeSource(source) {
