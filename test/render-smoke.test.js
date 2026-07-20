@@ -1,14 +1,22 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const path = require("node:path");
+const { PassThrough } = require("node:stream");
 const test = require("node:test");
 const {
+  chromeArguments,
+  connectPipe,
   DYNAMIC_FILES,
+  extensionChromeArguments,
   FIXTURE,
   INLINE_BREAK_FIXTURE,
-  requirePng
+  protocolConnection,
+  requirePng,
+  terminateBrowser,
+  waitForEvaluation
 } = require("../scripts/smoke-browser.js");
 
 const root = path.join(__dirname, "..");
@@ -84,4 +92,104 @@ test("browser smoke output validation accepts only bounded PNG images", () => {
     () => requirePng(`data:image/png;base64,${png.toString("base64")}`),
     /invalid dimensions/
   );
+});
+
+test("browser smoke uses the trusted pipe for unpacked extension loading", () => {
+  const launchArguments = extensionChromeArguments({
+    profile: "/tmp/tex-gmail-extension-profile"
+  });
+
+  assert.ok(launchArguments.includes("--disable-background-networking"));
+  assert.ok(launchArguments.includes(
+    "--host-resolver-rules=MAP * ~NOTFOUND"
+  ));
+  assert.ok(launchArguments.includes("--enable-unsafe-extension-debugging"));
+  assert.ok(launchArguments.includes("--remote-debugging-pipe"));
+  assert.equal(launchArguments.some(argument =>
+    argument.startsWith("--load-extension=")), false);
+  assert.equal(launchArguments.some(argument =>
+    argument.startsWith("--disable-extensions-except=")), false);
+});
+
+test("browser renderer smoke keeps its loopback DevTools endpoint", () => {
+  const launchArguments = chromeArguments({
+    port: 9123,
+    profile: "/tmp/tex-gmail-renderer-profile"
+  });
+
+  assert.ok(launchArguments.includes("--remote-debugging-port=9123"));
+  assert.equal(launchArguments.includes("--remote-debugging-pipe"), false);
+});
+
+test("browser protocol commands have a bounded deadline", async () => {
+  const cdp = protocolConnection({
+    close() {},
+    commandTimeoutMs: 10,
+    send() {},
+    subscribe() {}
+  });
+
+  await assert.rejects(
+    cdp.command("Never.responds"),
+    /Never\.responds timed out/
+  );
+});
+
+test("browser pipe exit rejects pending and future protocol commands", async () => {
+  const browser = new EventEmitter();
+  browser.stdio = [];
+  browser.stdio[3] = new PassThrough();
+  browser.stdio[4] = new PassThrough();
+  const cdp = connectPipe(browser, { commandTimeoutMs: 1000 });
+  const pending = cdp.command("Browser.getVersion");
+
+  browser.emit("exit", 19, null);
+
+  await assert.rejects(pending, /Chrome exited with code 19/);
+  await assert.rejects(
+    cdp.command("Target.getTargets"),
+    /Chrome exited with code 19/
+  );
+});
+
+test("browser cleanup escalates from SIGTERM to SIGKILL and reaps", async () => {
+  const browser = new EventEmitter();
+  const signals = [];
+  browser.exitCode = null;
+  browser.kill = signal => {
+    signals.push(signal);
+    if (signal === "SIGKILL") {
+      browser.exitCode = 137;
+      queueMicrotask(() => browser.emit("exit", 137, signal));
+    }
+    return true;
+  };
+
+  await terminateBrowser(browser, {
+    killTimeoutMs: 100,
+    termTimeoutMs: 1
+  });
+
+  assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
+  assert.equal(browser.exitCode, 137);
+});
+
+test("browser evaluation retries transient navigation context errors", async () => {
+  let attempts = 0;
+  const cdp = {
+    async command() {
+      attempts++;
+      if (attempts === 1)
+        throw new Error("Execution context was destroyed.");
+      return { result: { value: "ready" } };
+    }
+  };
+
+  assert.equal(
+    await waitForEvaluation(cdp, "true", "Navigated page", {
+      timeoutMs: 100
+    }),
+    "ready"
+  );
+  assert.equal(attempts, 2);
 });
