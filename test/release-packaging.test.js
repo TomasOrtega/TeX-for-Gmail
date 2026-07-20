@@ -95,6 +95,20 @@ test("tracked-file discovery uses NUL-safe Git output", () => {
   }]);
 });
 
+test("source builds report tracked-file discovery failures", t => {
+  const root = createFixture(t);
+
+  assert.throws(() => buildSourceArchive({
+    root,
+    outputPath: path.join(root, "source.zip"),
+    quiet: true,
+    git() {
+      throw new Error("git unavailable");
+    }
+  }), /Cannot determine tracked files with Git: git unavailable/);
+  assert.equal(fs.existsSync(path.join(root, "source.zip")), false);
+});
+
 test("source ZIPs have deterministic entries, metadata, and bytes", t => {
   const root = createFixture(t);
   const trackedFiles = [
