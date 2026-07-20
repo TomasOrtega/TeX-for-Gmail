@@ -28,29 +28,21 @@ function sourcePath(filename) {
 
 function loadChromeServiceWorker(options = {}) {
   const createCalls = [];
-  const createdMenus = [];
+  const closeCalls = [];
   const imports = [];
-  const onClicked = createEvent();
-  const onCommand = createEvent();
-  const onInstalled = createEvent();
   const onMessage = createEvent();
+  const sentMessages = [];
+  const warnings = [];
   let getContextsCalls = 0;
 
   const chrome = {
-    commands: {
-      onCommand
-    },
-    contextMenus: {
-      create(menu, callback) {
-        createdMenus.push(menu);
-        callback?.();
-      },
-      onClicked,
-      remove(_id, callback) {
-        callback?.();
-      }
-    },
     offscreen: {
+      closeDocument() {
+        closeCalls.push(true);
+        if (options.closeDocument)
+          return options.closeDocument();
+        return Promise.resolve();
+      },
       createDocument(parameters) {
         createCalls.push(parameters);
         if (options.createDocument)
@@ -59,6 +51,7 @@ function loadChromeServiceWorker(options = {}) {
       }
     },
     runtime: {
+      id: "tex-for-gmail-test",
       getContexts() {
         getContextsCalls++;
         return Promise.resolve(options.contexts || []);
@@ -70,15 +63,15 @@ function loadChromeServiceWorker(options = {}) {
         return `chrome-extension://test/${filename}`;
       },
       lastError: null,
-      onInstalled,
-      onMessage
-    },
-    tabs: {
-      query(_query, callback) {
-        callback([]);
-      },
-      sendMessage(_tabId, _message, callback) {
-        callback?.();
+      onMessage,
+      sendMessage(message) {
+        sentMessages.push(message);
+        if (options.sendMessage)
+          return options.sendMessage(message);
+        if (message.type ===
+            "tex-for-gmail:prepare-idle-renderer-close")
+          return Promise.resolve(options.prepareResult || { ok: true });
+        return Promise.resolve({ ok: true });
       }
     }
   };
@@ -87,7 +80,9 @@ function loadChromeServiceWorker(options = {}) {
   context = vm.createContext({
     chrome,
     console: {
-      warn() {}
+      warn(warning) {
+        warnings.push(warning);
+      }
     },
     importScripts(filename) {
       imports.push(filename);
@@ -107,12 +102,13 @@ function loadChromeServiceWorker(options = {}) {
 
   return {
     chrome,
+    closeCalls,
     createCalls,
-    createdMenus,
     getContextsCalls: () => getContextsCalls,
     imports,
-    onInstalled,
-    onMessage
+    onMessage,
+    sentMessages,
+    warnings
   };
 }
 
@@ -129,6 +125,23 @@ function requestRenderer(runtime, sender = {
       ),
       true
     );
+  });
+}
+
+function requestClose(runtime, generation = 1, sender = {
+  id: "tex-for-gmail-test",
+  url: "chrome-extension://test/src/chrome-offscreen.html"
+}) {
+  const listener = runtime.onMessage.listeners[1];
+  return new Promise(resolve => {
+    const result = listener({
+      generation,
+      type: "tex-for-gmail:close-idle-renderer"
+    }, sender, resolve);
+    if (result === undefined)
+      resolve(undefined);
+    else
+      assert.equal(result, true);
   });
 }
 
@@ -152,8 +165,8 @@ test("Chrome creates one offscreen renderer for concurrent requests", async () =
     ...runtime.createCalls[0],
     reasons: [...runtime.createCalls[0].reasons]
   }, {
-    justification: "Run the packaged pdfTeX and MuPDF workers locally.",
-    reasons: ["WORKERS"],
+    justification: "Render local MathJax SVG output into a PNG image.",
+    reasons: ["BLOBS"],
     url: "src/chrome-offscreen.html"
   });
   resolveCreation();
@@ -161,7 +174,7 @@ test("Chrome creates one offscreen renderer for concurrent requests", async () =
   assert.deepEqual({ ...await first }, { ok: true });
   assert.deepEqual({ ...await second }, { ok: true });
   assert.deepEqual(runtime.imports, ["controller.js"]);
-  assert.equal(runtime.getContextsCalls(), 2);
+  assert.equal(runtime.getContextsCalls(), 1);
 });
 
 test("Chrome reuses an existing offscreen renderer", async () => {
@@ -194,12 +207,137 @@ test("Chrome reports bootstrap failures and permits a retry", async () => {
   assert.equal(runtime.createCalls.length, 2);
 });
 
-test("Chrome creates context menus only from installation events", () => {
+test("Chrome service worker does not register legacy extension UI", () => {
   const runtime = loadChromeServiceWorker();
 
-  assert.equal(runtime.createdMenus.length, 0);
-  assert.equal(runtime.onInstalled.listeners.length, 1);
-  runtime.onInstalled.listeners[0]();
-  assert.equal(runtime.createdMenus.length, 1);
-  assert.equal(runtime.createdMenus[0].id, "tex-for-gmail-render");
+  assert.equal("commands" in runtime.chrome, false);
+  assert.equal("contextMenus" in runtime.chrome, false);
+  assert.equal("tabs" in runtime.chrome, false);
+});
+
+test("Chrome closes the renderer only for its authenticated idle message", async () => {
+  const runtime = loadChromeServiceWorker();
+  const listener = runtime.onMessage.listeners[1];
+  const message = {
+    generation: 1,
+    type: "tex-for-gmail:close-idle-renderer"
+  };
+  const ownOffscreenDocument = {
+    id: "tex-for-gmail-test",
+    url: "chrome-extension://test/src/chrome-offscreen.html"
+  };
+
+  assert.equal(listener({ type: "other" }, ownOffscreenDocument), undefined);
+  assert.equal(listener(message, {
+    ...ownOffscreenDocument,
+    id: "another-extension"
+  }), undefined);
+  assert.equal(listener(message, {
+    ...ownOffscreenDocument,
+    url: "chrome-extension://test/src/background.html"
+  }), undefined);
+  let invalidResponse;
+  assert.equal(listener({
+    generation: -1,
+    type: "tex-for-gmail:close-idle-renderer"
+  }, ownOffscreenDocument, value => {
+    invalidResponse = value;
+  }), false);
+  assert.deepEqual({ ...invalidResponse }, { ok: false });
+  assert.deepEqual(
+    { ...await requestClose(runtime, 1, ownOffscreenDocument) },
+    { ok: true }
+  );
+  assert.equal(runtime.closeCalls.length, 1);
+  assert.deepEqual(runtime.sentMessages.map(message => ({ ...message })), [{
+    generation: 1,
+    type: "tex-for-gmail:prepare-idle-renderer-close"
+  }]);
+});
+
+test("Chrome can retry cleanup after closing the renderer fails", async () => {
+  let attempt = 0;
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      attempt++;
+      return attempt === 1
+        ? Promise.reject(new Error("offscreen close failed"))
+        : Promise.resolve();
+    }
+  });
+  const sender = {
+    id: "tex-for-gmail-test",
+    url: "chrome-extension://test/src/chrome-offscreen.html"
+  };
+
+  assert.deepEqual({ ...await requestClose(runtime, 1, sender) }, {
+    error: "offscreen close failed",
+    ok: false
+  });
+  assert.deepEqual({ ...await requestClose(runtime, 1, sender) }, {
+    ok: true
+  });
+
+  assert.equal(runtime.closeCalls.length, 2);
+  assert.deepEqual(runtime.warnings, ["offscreen close failed"]);
+  assert.deepEqual(runtime.sentMessages.map(message => message.type), [
+    "tex-for-gmail:prepare-idle-renderer-close",
+    "tex-for-gmail:cancel-idle-renderer-close",
+    "tex-for-gmail:prepare-idle-renderer-close"
+  ]);
+});
+
+test("Chrome reports both close and cancellation transport failures", async () => {
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      return Promise.reject(new Error("offscreen close failed"));
+    },
+    sendMessage(message) {
+      if (message.type === "tex-for-gmail:cancel-idle-renderer-close")
+        return Promise.reject(new Error("close cancellation failed"));
+      return Promise.resolve({ ok: true });
+    }
+  });
+
+  assert.deepEqual({ ...await requestClose(runtime) }, {
+    error: "offscreen close failed",
+    ok: false
+  });
+  assert.deepEqual(runtime.warnings, [
+    "close cancellation failed",
+    "offscreen close failed"
+  ]);
+});
+
+test("Chrome skips closing when the offscreen generation is no longer idle", async () => {
+  const runtime = loadChromeServiceWorker({
+    prepareResult: { ok: false }
+  });
+
+  assert.deepEqual({ ...await requestClose(runtime) }, {
+    ok: false
+  });
+  assert.equal(runtime.closeCalls.length, 0);
+});
+
+test("Chrome serializes renderer creation behind an in-progress close", async () => {
+  let releaseClose;
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      return new Promise(resolve => {
+        releaseClose = resolve;
+      });
+    }
+  });
+
+  const closing = requestClose(runtime);
+  await new Promise(resolve => setImmediate(resolve));
+  const ensuring = requestRenderer(runtime);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(runtime.createCalls.length, 0);
+
+  releaseClose();
+  assert.deepEqual({ ...await closing }, { ok: true });
+  assert.deepEqual({ ...await ensuring }, { ok: true });
+  assert.equal(runtime.createCalls.length, 1);
 });

@@ -34,6 +34,114 @@ test("prohibited AsyncAPI generator packages are absent", () => {
     );
 });
 
+test("production packages exclude the legacy rendering toolchain", () => {
+  const prohibitedPackages = ["browserfs", "mupdf"];
+  const installedPaths = Object.keys(packageLock.packages || {});
+  for (const packageName of prohibitedPackages)
+    assert.equal(
+      installedPaths.some(entry =>
+        entry === `node_modules/${packageName}` ||
+        entry.endsWith(`/node_modules/${packageName}`)
+      ),
+      false,
+      `${packageName} remains in the dependency tree`
+    );
+
+  const prohibitedPaths = [
+    "chrome-extension/resources/browserfs",
+    "chrome-extension/resources/data",
+    "chrome-extension/resources/mupdf",
+    "chrome-extension/resources/scripts/browserfs.min.js",
+    "chrome-extension/resources/scripts/pdflatex.js",
+    "chrome-extension/resources/texlive",
+    "chrome-extension/resources/wasm",
+    "chrome-extension/src/mupdfworker.js",
+    "chrome-extension/src/pdftexworker.js",
+    "scripts/smoke-mupdf.mjs",
+    "scripts/trace-tex-resources.js",
+    "scripts/vendor-browserfs.js",
+    "scripts/vendor-mupdf.js",
+    "scripts/vendor-texlive.js",
+    "wasm"
+  ];
+  for (const relativePath of prohibitedPaths)
+    assert.equal(
+      fs.existsSync(path.join(root, relativePath)),
+      false,
+      `${relativePath} remains in the source package`
+    );
+
+  const extensionFiles = fs.readdirSync(
+    path.join(root, "chrome-extension"),
+    { recursive: true }
+  );
+  assert.equal(
+    extensionFiles.some(filename => filename.endsWith(".wasm")),
+    false,
+    "a WebAssembly binary remains in the extension package"
+  );
+});
+
+test("packaged MathJax files exactly match pinned npm artifacts", () => {
+  const expectedPackages = new Map([
+    [
+      "@mathjax/src@4.1.2",
+      "sha512-7z3mQCQu4YqC1XyO4hMRkNTO49+5ZN8VtvBYKx+" +
+        "aGIXuGrlUvEAQZzeN/gf3tqZuVU4AI2yf1nYrrL1+BrSxIQ=="
+    ],
+    [
+      "@mathjax/mathjax-newcm-font@4.1.2",
+      "sha512-lZHMjNP2XbABHA3kVn40rbse5ERUeMEmrGH03qLkCwxq4/" +
+        "5Z/eNLr0akw1MmQcqTwCbvkx1BFcmJ7RCfbRlw3Q=="
+    ]
+  ]);
+  const mathJaxComponents = artifactLock.components.filter(component =>
+    component.npmPackage?.startsWith("@mathjax/")
+  );
+
+  assert.deepEqual(
+    new Set(mathJaxComponents.map(component => component.npmPackage)),
+    new Set(expectedPackages.keys())
+  );
+  for (const component of mathJaxComponents) {
+    const expectedIntegrity = expectedPackages.get(component.npmPackage);
+    const separator = component.npmPackage.lastIndexOf("@");
+    const packageName = component.npmPackage.slice(0, separator);
+    const version = component.npmPackage.slice(separator + 1);
+    const locked = packageLock.packages[`node_modules/${packageName}`];
+
+    assert.equal(component.version, version);
+    assert.equal(component.license, "Apache-2.0");
+    assert.equal(component.npmIntegrity, expectedIntegrity);
+    assert.equal(component.source.endsWith(`/tree/${version}`), true);
+    assert.match(component.provenance, /copies exact .*without modification/);
+    assert.equal(locked.version, version);
+    assert.equal(locked.integrity, expectedIntegrity);
+    assert.equal(locked.license, "Apache-2.0");
+  }
+
+  assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.2");
+  const { check, files } = require("../scripts/vendor-mathjax.js");
+  assert.equal(check(), files.length);
+  assert.deepEqual(
+    files.map(file => file.destination).sort(),
+    [
+      "LICENSE",
+      "input/tex/extensions/begingroup.js",
+      "input/tex/extensions/boldsymbol.js",
+      "mathjax-newcm-font/svg/dynamic/arrows.js",
+      "mathjax-newcm-font/svg/dynamic/calligraphic.js",
+      "mathjax-newcm-font/svg/dynamic/double-struck.js",
+      "mathjax-newcm-font/svg/dynamic/fraktur.js",
+      "mathjax-newcm-font/svg/dynamic/latin.js",
+      "mathjax-newcm-font/svg/dynamic/math.js",
+      "mathjax-newcm-font/svg/dynamic/shapes.js",
+      "mathjax-newcm-font/svg/dynamic/symbols-b-i.js",
+      "tex-svg.js"
+    ]
+  );
+});
+
 test("Firefox tooling uses the fixed, compatible ZIP parser", t => {
   const admZip = packageLock.packages["node_modules/adm-zip"];
   const source = fs.mkdtempSync(path.join(os.tmpdir(), "tex-gmail-zip-source-"));
@@ -55,22 +163,7 @@ test("Firefox tooling uses the fixed, compatible ZIP parser", t => {
   assert.equal(fs.readFileSync(path.join(target, "profile.txt"), "utf8"), "safe");
 });
 
-test("runtime TeX data is packaged and records its source revision", () => {
-  const source = fs.readFileSync(
-    path.join(root, "chrome-extension", "src", "pdftexworker.js"),
-    "utf8"
-  );
-  const texLive = artifactLock.sourceResources.texLive;
-
-  assert.match(texLive.commit, /^[0-9a-f]{40}$/);
-  assert.ok(source.includes(
-    'const TEXLIVE_BASE_URL = "../resources/texlive"'
-  ));
-  assert.ok(source.includes("baseUrl: TEXLIVE_BASE_URL"));
-  assert.doesNotMatch(source, /cdn\.jsdelivr\.net|CacheFS|storeName:\s*`texlive/);
-});
-
-test("generated artifacts pass the repository integrity check", () => {
+test("vendored artifacts pass the repository integrity check", () => {
   const { verifyArtifacts } = require("../scripts/verify-artifacts.js");
 
   assert.doesNotThrow(() => verifyArtifacts({ root, quiet: true }));

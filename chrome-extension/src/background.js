@@ -2,166 +2,46 @@
 
 console.log("TeX for Gmail renderer is ready.");
 
-const DEFAULT_PDFTEX_POOL = { count: 1, multiplier: 1, maxQueue: 6 };
-const DEFAULT_MUPDF_POOL = { count: 1, multiplier: 1, maxQueue: 4 };
-const PDFTEX_TIMEOUT = {
-  retireOnError: true,
-  timeoutMs: 30000,
-  timeoutMessage: "LaTeX compilation timed out."
-};
-const MUPDF_TIMEOUT = {
-  retireOnError: true,
-  timeoutMs: 15000,
-  timeoutMessage: "Image rendering timed out."
-};
-const MAX_TEX_SOURCE_LENGTH = 24000;
-const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const MATHJAX_SCRIPT = "resources/mathjax/tex-svg.js";
+const TEX_SANDBOX_PREFIX = "\\begingroupSandbox\n";
+const MAX_SOURCE_LENGTH = 20000;
+const MAX_SVG_LENGTH = 4 * 1024 * 1024;
 const MAX_PNG_BYTES = 8 * 1024 * 1024;
+const MAX_RASTER_DIMENSION = 4096;
+const MAX_RASTER_PIXELS = 16 * 1024 * 1024;
 const MIN_RENDER_SCALE = 0.5;
 const MAX_RENDER_SCALE = 4;
-const WORKER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const RENDER_PADDING_PX = 3;
+const RENDER_TIMEOUT_MS = 15000;
+const OFFSCREEN_IDLE_CLOSE_MS = 5 * 60 * 1000;
+const OFFSCREEN_IDLE_CLOSE_MESSAGE =
+  "tex-for-gmail:close-idle-renderer";
+const OFFSCREEN_PREPARE_CLOSE_MESSAGE =
+  "tex-for-gmail:prepare-idle-renderer-close";
+const OFFSCREEN_CANCEL_CLOSE_MESSAGE =
+  "tex-for-gmail:cancel-idle-renderer-close";
+const CHROME_SERVICE_WORKER_PATH = "src/chrome-service-worker.js";
+const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
+const IS_CHROME_OFFSCREEN =
+  globalThis.location?.href ===
+    chrome.runtime.getURL("src/chrome-offscreen.html");
 const ports = new Map();
-let pdftexWorkerPool;
-let mupdfWorkerPool;
+let mathJaxPromise;
+let renderQueue = Promise.resolve();
 let activeRenders = 0;
-let workerIdleTimer;
+let idleCloseTimer;
+let rendererClosing = false;
+let rendererGeneration = 0;
+let closingGeneration;
 
-function destroyWorkerPools() {
-  clearTimeout(workerIdleTimer);
-  workerIdleTimer = undefined;
-  for (let pool of [pdftexWorkerPool, mupdfWorkerPool]) {
-    if (!pool || pool.destroyed)
-      continue;
-    try {
-      pool.destroy();
-    } catch (error) {
-      console.warn(error);
-    }
-  }
-}
-
-function ensurePdftexWorkerPool() {
-  if (!pdftexWorkerPool || pdftexWorkerPool.destroyed)
-    setupPdftexWorkerPool(DEFAULT_PDFTEX_POOL);
-  return pdftexWorkerPool;
-}
-
-function ensureMupdfWorkerPool() {
-  if (!mupdfWorkerPool || mupdfWorkerPool.destroyed)
-    setupMupdfWorkerPool(DEFAULT_MUPDF_POOL);
-  return mupdfWorkerPool;
-}
-
-function workerCommunicator(scriptName, workerName, workerType) {
-  let workerUrl = chrome.runtime.getURL
-    ? chrome.runtime.getURL(`src/${scriptName}`)
-    : scriptName;
-  let options = { name: workerName };
-  if (workerType)
-    options.type = workerType;
-  return new Communicator(new Worker(workerUrl, options));
-}
-
-function setupPdftexWorkerPool({
-  count = DEFAULT_PDFTEX_POOL.count,
-  multiplier = DEFAULT_PDFTEX_POOL.multiplier,
-  maxQueue = DEFAULT_PDFTEX_POOL.maxQueue
-} = {}) {
-  if (pdftexWorkerPool && !pdftexWorkerPool.destroyed)
-    pdftexWorkerPool.destroy();
-
-  pdftexWorkerPool = new Pool({
-    name: "pdftexWorkerPool",
-    count: count,
-    cons: () => workerCommunicator(
-      "pdftexworker.js",
-      `pdftexworker-${random_id(16)}`
-    ),
-    free: comm => comm.target.terminate(),
-    autoRelease: true,
-    initialize: comm => comm.request("ready", {}),
-    multiplier: multiplier,
-    maxQueue: maxQueue
-  });
-
-  return pdftexWorkerPool;
-}
-
-function setupMupdfWorkerPool({
-  count = DEFAULT_MUPDF_POOL.count,
-  multiplier = DEFAULT_MUPDF_POOL.multiplier,
-  maxQueue = DEFAULT_MUPDF_POOL.maxQueue
-} = {}) {
-  if (mupdfWorkerPool && !mupdfWorkerPool.destroyed)
-    mupdfWorkerPool.destroy();
-
-  mupdfWorkerPool = new Pool({
-    name: "mupdfWorkerPool",
-    count: count,
-    cons: () => workerCommunicator(
-      "mupdfworker.js",
-      `mupdfworker-${random_id(16)}`
-    ),
-    free: comm => comm.target.terminate(),
-    autoRelease: true,
-    initialize: comm => comm.request("ready", {}),
-    multiplier: multiplier,
-    maxQueue: maxQueue
-  });
-
-  return mupdfWorkerPool;
-}
-
-function requireSource(srcCode) {
-  if (typeof srcCode !== "string" || !srcCode.trim())
+function requireSource(source) {
+  if (typeof source !== "string" || !source.trim())
     throw new Error("LaTeX source must be a non-empty string.");
-  if (srcCode.length > MAX_TEX_SOURCE_LENGTH)
+  if (source.length > MAX_SOURCE_LENGTH)
     throw new Error("LaTeX source is too long.");
-  if (srcCode.includes("\0"))
+  if (source.includes("\0"))
     throw new Error("LaTeX source contains an invalid null character.");
-  return srcCode;
-}
-
-function requireByteLength(file, maxBytes, label) {
-  if (!file || !Number.isSafeInteger(file.byteLength))
-    throw new Error(`${label} output is invalid.`);
-  if (file.byteLength === 0)
-    throw new Error(`${label} output is empty.`);
-  if (file.byteLength > maxBytes)
-    throw new Error(`${label} output exceeds the ${maxBytes} byte limit.`);
-  return file;
-}
-
-function requirePdfFile(file) {
-  if (!(file instanceof Uint8Array))
-    throw new Error("PDF output must be a byte array.");
-  requireByteLength(file, MAX_PDF_BYTES, "PDF");
-  if (file.byteLength < 5 ||
-      file[0] !== 0x25 ||
-      file[1] !== 0x50 ||
-      file[2] !== 0x44 ||
-      file[3] !== 0x46 ||
-      file[4] !== 0x2d)
-    throw new Error("PDF output has an invalid signature.");
-  return file;
-}
-
-function requirePngFile(file) {
-  if (!(file instanceof ArrayBuffer))
-    throw new Error("PNG output must be an array buffer.");
-  requireByteLength(file, MAX_PNG_BYTES, "PNG");
-  const bytes = new Uint8Array(file);
-  if (bytes.byteLength < 8 ||
-      bytes[0] !== 0x89 ||
-      bytes[1] !== 0x50 ||
-      bytes[2] !== 0x4e ||
-      bytes[3] !== 0x47 ||
-      bytes[4] !== 0x0d ||
-      bytes[5] !== 0x0a ||
-      bytes[6] !== 0x1a ||
-      bytes[7] !== 0x0a)
-    throw new Error("PNG output has an invalid signature.");
-  return file;
+  return source;
 }
 
 function requireScale(scale) {
@@ -180,64 +60,252 @@ function requireAlpha(alpha) {
   return alpha;
 }
 
+function requireDimensions(width, height) {
+  if (!Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width < 1 ||
+      height < 1 ||
+      width > MAX_RASTER_DIMENSION ||
+      height > MAX_RASTER_DIMENSION ||
+      width * height > MAX_RASTER_PIXELS)
+    throw new Error("Rendered image dimensions exceed the safety limit.");
+  return { height, width };
+}
+
+function requirePngFile(file) {
+  if (!(file instanceof ArrayBuffer))
+    throw new Error("PNG output must be an array buffer.");
+  if (file.byteLength < 8 || file.byteLength > MAX_PNG_BYTES)
+    throw new Error("PNG output exceeds the size limit or is empty.");
+
+  const bytes = new Uint8Array(file);
+  if (bytes[0] !== 0x89 ||
+      bytes[1] !== 0x50 ||
+      bytes[2] !== 0x4e ||
+      bytes[3] !== 0x47 ||
+      bytes[4] !== 0x0d ||
+      bytes[5] !== 0x0a ||
+      bytes[6] !== 0x1a ||
+      bytes[7] !== 0x0a)
+    throw new Error("PNG output has an invalid signature.");
+  return file;
+}
+
 function validateRenderRequest(request) {
   if (!request || typeof request !== "object" || Array.isArray(request))
     throw new Error("Malformed render request.");
 
-  const allowed = new Set(["alpha", "scale", "srcCode"]);
-  for (let key of Object.keys(request)) {
+  const allowed = new Set(["alpha", "display", "scale", "source"]);
+  for (const key of Object.keys(request)) {
     if (!allowed.has(key))
       throw new Error(`Unexpected render option: ${key}.`);
   }
+  if (typeof request.display !== "boolean")
+    throw new Error("Display mode must be a boolean.");
 
   return {
     alpha: requireAlpha(request.alpha),
+    display: request.display,
     scale: requireScale(request.scale),
-    srcCode: requireSource(request.srcCode)
+    source: requireSource(request.source)
   };
 }
 
-async function compile(srcCode) {
-  requireSource(srcCode);
-  let pool = ensurePdftexWorkerPool();
-  return pool.process(async comm => {
-    let res = await comm.request(
-      "compile",
-      { srcCode: srcCode });
-    return requirePdfFile(res.pdfFile);
-  },
-    PDFTEX_TIMEOUT
-  );
+function mathJaxConfig() {
+  return {
+    loader: {
+      load: ["[tex]/begingroup", "[tex]/boldsymbol"],
+      paths: {
+        fonts: chrome.runtime.getURL("resources/mathjax")
+      }
+    },
+    options: {
+      enableEnrichment: false,
+      enableExplorer: false,
+      enableMenu: false,
+      enableSpeech: false,
+      menuOptions: {
+        settings: {
+          braille: false,
+          enrich: false,
+          speech: false
+        }
+      }
+    },
+    startup: {
+      typeset: false
+    },
+    svg: {
+      fontCache: "local"
+    },
+    tex: {
+      maxBuffer: MAX_SOURCE_LENGTH + TEX_SANDBOX_PREFIX.length,
+      maxTemplateSubtitutions: 10000,
+      packages: [
+        "base",
+        "ams",
+        "newcommand",
+        "noundefined",
+        "begingroup",
+        "boldsymbol"
+      ]
+    }
+  };
 }
 
-// pdfFile is an Uint8Array
-async function pdf2png(pdfFile, scale, pageNo, alpha) {
-  requirePdfFile(pdfFile);
-  requireScale(scale);
-  requireAlpha(alpha);
-  if (pageNo !== 1)
-    throw new Error("Only the first page can be rendered.");
-
-  let pool = ensureMupdfWorkerPool();
-  return pool.process(async comm => {
-    let res = await comm.request(
-      "pdf2png",
-      { pdfFile: pdfFile, scale: scale, pageNo: pageNo, alpha: alpha },
-      [pdfFile.buffer]);
-    return requirePngFile(res.pngFile);
-  },
-    MUPDF_TIMEOUT
-  );
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = url;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => {
+      reject(new Error("The packaged MathJax renderer could not be loaded."));
+    }, { once: true });
+    document.head.append(script);
+  });
 }
 
-async function compile2png(srcCode, scale, alpha) {
-  let pdfFile = await compile(srcCode);
-  let pngFile = await pdf2png(pdfFile, scale, 1, alpha);
-  return new Uint8Array(pngFile);
+async function loadMathJax() {
+  if (!mathJaxPromise) {
+    globalThis.MathJax = mathJaxConfig();
+    mathJaxPromise = loadScript(chrome.runtime.getURL(MATHJAX_SCRIPT))
+      .then(() => globalThis.MathJax.startup.promise)
+      .then(() => {
+        if (typeof globalThis.MathJax.tex2svgPromise !== "function")
+          throw new Error("The packaged MathJax renderer is invalid.");
+        return globalThis.MathJax;
+      })
+      .catch(error => {
+        mathJaxPromise = undefined;
+        throw error;
+      });
+  }
+  return mathJaxPromise;
+}
+
+function measureSvg(container) {
+  const host = document.createElement("div");
+  host.style.cssText =
+    "position:absolute;left:-100000px;top:0;font-size:16px;color:#000";
+  host.append(container);
+  document.body.append(host);
+
+  try {
+    const svg = container.querySelector("svg");
+    if (!svg)
+      throw new Error("MathJax did not produce an SVG image.");
+    const bounds = svg.getBoundingClientRect();
+    requireDimensions(bounds.width, bounds.height);
+    svg.setAttribute("color", "#000");
+    svg.setAttribute("height", `${bounds.height}px`);
+    svg.setAttribute("width", `${bounds.width}px`);
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const source = new XMLSerializer().serializeToString(svg);
+    if (source.length > MAX_SVG_LENGTH)
+      throw new Error("Rendered SVG exceeds the size limit.");
+    return source;
+  } finally {
+    host.remove();
+  }
+}
+
+async function renderSvg(source, display) {
+  const mathJax = await loadMathJax();
+  if (typeof mathJax.texReset === "function")
+    mathJax.texReset();
+  const container = await mathJax.tex2svgPromise(
+    TEX_SANDBOX_PREFIX + source,
+    {
+      containerWidth: 1200,
+      display,
+      em: 16,
+      ex: 8
+    }
+  );
+  return measureSvg(container);
+}
+
+function loadSvgImage(source) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(new Blob([source], {
+      type: "image/svg+xml;charset=utf-8"
+    }));
+    const image = new Image();
+    const cleanup = () => URL.revokeObjectURL(url);
+    image.addEventListener("load", () => {
+      cleanup();
+      resolve(image);
+    }, { once: true });
+    image.addEventListener("error", () => {
+      cleanup();
+      reject(new Error("The rendered SVG image could not be loaded."));
+    }, { once: true });
+    image.src = url;
+  });
+}
+
+function canvasPng(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error("The rendered image could not be encoded."));
+        return;
+      }
+      blob.arrayBuffer().then(resolve, reject);
+    }, "image/png");
+  });
+}
+
+async function rasterizeSvg(source, scale, alpha) {
+  const image = await loadSvgImage(source);
+  requireDimensions(image.naturalWidth, image.naturalHeight);
+
+  const padding = Math.ceil(RENDER_PADDING_PX * scale);
+  const contentWidth = Math.ceil(image.naturalWidth * scale);
+  const contentHeight = Math.ceil(image.naturalHeight * scale);
+  const { width, height } = requireDimensions(
+    contentWidth + padding * 2,
+    contentHeight + padding * 2
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context)
+    throw new Error("Canvas rendering is unavailable.");
+  if (alpha === 0) {
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+  }
+  context.drawImage(
+    image,
+    padding,
+    padding,
+    contentWidth,
+    contentHeight
+  );
+  return requirePngFile(await canvasPng(canvas));
+}
+
+function withRenderTimeout(render) {
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("LaTeX rendering timed out."));
+    }, RENDER_TIMEOUT_MS);
+  });
+  return Promise.race([render, timeout]).finally(() => clearTimeout(timer));
+}
+
+function enqueueRender(render) {
+  const execution = renderQueue.then(render, render);
+  renderQueue = execution.catch(() => undefined);
+  return execution;
 }
 
 function base64Encode(file) {
-  let bytes = file instanceof Uint8Array ? file : new Uint8Array(file);
+  const bytes = file instanceof Uint8Array ? file : new Uint8Array(file);
   let binary = "";
   const chunkSize = 0x8000;
   for (let offset = 0; offset < bytes.length; offset += chunkSize)
@@ -245,33 +313,102 @@ function base64Encode(file) {
   return btoa(binary);
 }
 
-async function toDataUrlFactory(f, tpe) {
-  let dataUrl = `data:${tpe};base64,${base64Encode(await f())}`;
-  return {
-    code: Communicator.SUCCESS,
-    payload: { dataUrl: dataUrl }
-  };
+function beginRender() {
+  if (rendererClosing)
+    throw new Error(RENDERER_RESTARTING_ERROR);
+  rendererGeneration++;
+  activeRenders++;
+  if (idleCloseTimer) {
+    clearTimeout(idleCloseTimer);
+    idleCloseTimer = undefined;
+  }
+}
+
+function scheduleIdleClose() {
+  if (!IS_CHROME_OFFSCREEN ||
+      activeRenders !== 0 ||
+      rendererClosing)
+    return;
+
+  const generation = rendererGeneration;
+  idleCloseTimer = setTimeout(() => {
+    idleCloseTimer = undefined;
+    if (activeRenders !== 0 ||
+        rendererClosing ||
+        rendererGeneration !== generation)
+      return;
+    Promise.resolve(chrome.runtime.sendMessage({
+      generation,
+      type: OFFSCREEN_IDLE_CLOSE_MESSAGE
+    })).catch(error => console.warn(error.message));
+  }, OFFSCREEN_IDLE_CLOSE_MS);
+}
+
+function finishRender() {
+  activeRenders--;
+  scheduleIdleClose();
+}
+
+function isServiceWorkerSender(sender) {
+  if (sender?.id !== chrome.runtime.id || sender.tab)
+    return false;
+  return sender.url === undefined ||
+    sender.url === chrome.runtime.getURL(CHROME_SERVICE_WORKER_PATH);
+}
+
+function handleOffscreenCloseControl(message, sender, sendResponse) {
+  if (!isServiceWorkerSender(sender) ||
+      (message?.type !== OFFSCREEN_PREPARE_CLOSE_MESSAGE &&
+       message?.type !== OFFSCREEN_CANCEL_CLOSE_MESSAGE))
+    return undefined;
+
+  const generation = message.generation;
+  if (!Number.isSafeInteger(generation) || generation < 0) {
+    sendResponse({ ok: false });
+    return false;
+  }
+
+  if (message.type === OFFSCREEN_PREPARE_CLOSE_MESSAGE) {
+    const idle = !rendererClosing &&
+      activeRenders === 0 &&
+      rendererGeneration === generation;
+    if (idle) {
+      rendererClosing = true;
+      closingGeneration = generation;
+      if (idleCloseTimer) {
+        clearTimeout(idleCloseTimer);
+        idleCloseTimer = undefined;
+      }
+    }
+    sendResponse({ ok: idle });
+    return false;
+  }
+
+  const cancelled = rendererClosing &&
+    closingGeneration === generation;
+  if (cancelled) {
+    rendererClosing = false;
+    closingGeneration = undefined;
+    scheduleIdleClose();
+  }
+  sendResponse({ ok: cancelled });
+  return false;
 }
 
 async function compile2pngDataURL(request) {
-  clearTimeout(workerIdleTimer);
-  workerIdleTimer = undefined;
-  activeRenders++;
-  try {
-    const { srcCode, scale, alpha } = validateRenderRequest(request);
-    return await toDataUrlFactory(
-      () => compile2png(srcCode, scale, alpha),
-      'image/png'
-    );
-  } finally {
-    activeRenders--;
-    if (activeRenders === 0) {
-      workerIdleTimer = setTimeout(
-        destroyWorkerPools,
-        WORKER_IDLE_TIMEOUT_MS
-      );
+  const { source, display, scale, alpha } = validateRenderRequest(request);
+  beginRender();
+  const rendering = enqueueRender(() =>
+    renderSvg(source, display).then(svg => rasterizeSvg(svg, scale, alpha))
+  );
+  rendering.then(finishRender, finishRender);
+  const png = await withRenderTimeout(rendering);
+  return {
+    code: Communicator.SUCCESS,
+    payload: {
+      dataUrl: `data:image/png;base64,${base64Encode(png)}`
     }
-  }
+  };
 }
 
 function setupMessageHandler(comm) {
@@ -279,23 +416,21 @@ function setupMessageHandler(comm) {
 }
 
 function isGmailPort(port) {
-  let senderUrl = port?.sender?.url || port?.sender?.tab?.url || "";
+  const senderUrl = port?.sender?.url || port?.sender?.tab?.url || "";
   return /^https:\/\/mail\.google\.com(?:\/|$)/.test(senderUrl);
 }
 
-chrome.runtime.onConnect.addListener(function (port) {
+if (IS_CHROME_OFFSCREEN)
+  chrome.runtime.onMessage.addListener(handleOffscreenCloseControl);
+
+chrome.runtime.onConnect.addListener(port => {
   if (!isGmailPort(port)) {
     port.disconnect();
     return;
   }
 
-  let comm = new Communicator(new PortWrapper(port));
+  const comm = new Communicator(new PortWrapper(port));
   ports.set(port, comm);
   setupMessageHandler(comm);
-
-  port.onDisconnect.addListener(function () {
-    ports.delete(port);
-    if (ports.size === 0)
-      destroyWorkerPools();
-  });
+  port.onDisconnect.addListener(() => ports.delete(port));
 });

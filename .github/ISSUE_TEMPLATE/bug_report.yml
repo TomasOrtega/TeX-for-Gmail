@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible extension problem
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Search existing issues first. Remove private email content from every
+        field and attachment.
+  - type: input
+    id: version
+    attributes:
+      label: Extension version or commit
+      placeholder: 1.0.0 or a commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Firefox
+        - Chrome
+    validations:
+      required: true
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser version
+    validations:
+      required: true
+  - type: textarea
+    id: formula
+    attributes:
+      label: Minimal formula
+      description: Use a synthetic formula with no private content.
+      render: tex
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove private Gmail data before pasting console output.
+      render: shell

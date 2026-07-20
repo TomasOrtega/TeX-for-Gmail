@@ -7,7 +7,6 @@ const root = path.join(__dirname, "..");
 const lcovPath = path.join(root, "coverage", "lcov.info");
 const badgePath = path.join(root, ".github", "badges", "coverage.svg");
 const coreDirectories = [
-  "chrome-extension/popup",
   "chrome-extension/src"
 ];
 

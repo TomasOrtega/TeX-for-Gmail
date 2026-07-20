@@ -22,18 +22,13 @@ test("core coverage discovers every authored runtime script", () => {
   const sources = discoverCoreSources();
 
   assert.deepEqual(sources, [
-    "chrome-extension/popup/popup.js",
     "chrome-extension/src/background.js",
     "chrome-extension/src/chrome-service-worker.js",
     "chrome-extension/src/communicator.js",
     "chrome-extension/src/contentscr.js",
     "chrome-extension/src/controller.js",
     "chrome-extension/src/latex.js",
-    "chrome-extension/src/mupdfworker.js",
-    "chrome-extension/src/pdftexworker.js",
-    "chrome-extension/src/pool.js",
-    "chrome-extension/src/portwrapper.js",
-    "chrome-extension/src/utils.js"
+    "chrome-extension/src/portwrapper.js"
   ]);
 });
 

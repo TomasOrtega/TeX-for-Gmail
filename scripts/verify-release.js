@@ -19,6 +19,15 @@ function requireExactArray(actual, expected, label) {
     fail(`${label} differs from the reviewed release set`);
 }
 
+function requireComposeToolbarOnly(manifest, target) {
+  if (manifest.action ||
+      manifest.browser_action ||
+      manifest.commands ||
+      manifest.page_action) {
+    fail(`${target} manifest must not expose legacy extension UI`);
+  }
+}
+
 function manifestResourcePaths(manifest) {
   const paths = new Set();
   const add = value => {
@@ -35,14 +44,6 @@ function manifestResourcePaths(manifest) {
   };
 
   addIcons(manifest.icons);
-  for (const action of [
-    manifest.action,
-    manifest.browser_action,
-    manifest.page_action
-  ]) {
-    addIcons(action?.default_icon);
-    add(action?.default_popup);
-  }
   add(manifest.background?.page);
   add(manifest.background?.service_worker);
   for (const filename of manifest.background?.scripts || [])
@@ -57,7 +58,6 @@ function manifestResourcePaths(manifest) {
   add(manifest.devtools_page);
   add(manifest.options_page);
   add(manifest.options_ui?.page);
-  add(manifest.sidebar_action?.default_panel);
   for (const filename of Object.values(manifest.chrome_url_overrides || {}))
     add(filename);
   return paths;
@@ -65,10 +65,15 @@ function manifestResourcePaths(manifest) {
 
 function verifyTargetManifest(config) {
   const expectedCsp =
-    "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; " +
-    "connect-src 'self'; img-src 'self' data:; style-src 'self'; " +
-    "worker-src 'self'; object-src 'none'";
+    "default-src 'none'; script-src 'self'; connect-src 'none'; " +
+    "img-src 'self' data: blob:; style-src 'self' " +
+    "'sha256-e5jd7xQq9aULFFMD0eTEu9T1k/67HYr2XT/IFRaDiI0=' " +
+    "'sha256-3ZSLWaOQtqrQ6iNoyQlBEIKBi4iPfnn6qanv5SmcYbg=' " +
+    "'sha256-bgFI+8WNpZyQTg52T+OSNh5Vbm0kkPnj/kOliAUyReE=' " +
+    "'sha256-khzm1f0RgYGW/mmWtJrCL6sPH/UAtSpOwXMy3ZMP/7g='; " +
+    "object-src 'none'";
   const { manifest, target } = config;
+  requireComposeToolbarOnly(manifest, target);
 
   if (target === "firefox") {
     if (manifest.manifest_version !== 2)
@@ -83,7 +88,7 @@ function verifyTargetManifest(config) {
     );
     requireExactArray(
       manifest.permissions,
-      ["contextMenus", "https://mail.google.com/*"],
+      ["https://mail.google.com/*"],
       "Firefox permissions"
     );
     if (manifest.host_permissions ||
@@ -106,7 +111,7 @@ function verifyTargetManifest(config) {
     fail("Chrome incognito access must remain disabled");
   requireExactArray(
     manifest.permissions,
-    ["contextMenus", "offscreen"],
+    ["offscreen"],
     "Chrome permissions"
   );
   requireExactArray(
@@ -152,8 +157,12 @@ function verifyRelease({
     /(^|\/)\.env(?:\.|$)/,
     /(^|\/)hot-reload\.js$/,
     /\.(?:key|pem|p12)$/,
-    /\.js\.map$/
+    /\.js\.map$/,
+    /(?:^|\/)(?:browserfs|mupdf|texlive|wasm)(?:\/|$)/,
+    /(?:^|\/)(?:mupdfworker|pdftexworker|pdflatex)(?:\.|$)/
   ];
+  const maxPackageFiles = 40;
+  const maxPackageBytes = 13 * 256 * 1024;
   const targetResults = [];
   for (const target of TARGETS) {
     const config = getTargetConfig({ root, target });
@@ -185,7 +194,13 @@ function verifyRelease({
       if (forbidden.some(pattern => pattern.test(filename)))
         fail(`${target} package contains forbidden release file: ${filename}`);
     }
-    targetResults.push({ files: files.size, target });
+    const bytes = [...files.values()]
+      .reduce((total, contents) => total + contents.byteLength, 0);
+    if (files.size > maxPackageFiles)
+      fail(`${target} package exceeds the ${maxPackageFiles}-file budget`);
+    if (bytes > maxPackageBytes)
+      fail(`${target} package exceeds the ${maxPackageBytes}-byte budget`);
+    targetResults.push({ bytes, files: files.size, target });
   }
 
   const result = verifyArtifacts({ root, quiet: true });

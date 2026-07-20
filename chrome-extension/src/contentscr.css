@@ -17,8 +17,40 @@
   background: #b3261e;
 }
 
+.tex-for-gmail-toolbar-button {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: 600 18px/1 Arial, sans-serif;
+  height: 28px;
+  justify-content: center;
+  margin: 0 2px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.tex-for-gmail-toolbar-button:hover,
+.tex-for-gmail-toolbar-button:focus-visible {
+  background: rgb(60 64 67 / 12%);
+}
+
+.tex-for-gmail-toolbar-button:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 1px;
+}
+
 .tex-for-gmail-image {
   height: auto;
   max-width: 100%;
   vertical-align: middle;
+}
+
+.tex-for-gmail-display {
+  display: block;
+  margin: 0.5em auto;
 }

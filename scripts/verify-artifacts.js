@@ -38,31 +38,14 @@ function walk(directory) {
 }
 
 function discoverProtectedArtifacts(root) {
-  const extensionResources = path.join(root, "chrome-extension", "resources");
-  const browserFsResources = path.join(extensionResources, "browserfs");
-  const extensionScripts = path.join(extensionResources, "scripts");
-  const mupdfResources = path.join(extensionResources, "mupdf");
-  const texLiveResources = path.join(extensionResources, "texlive");
-  const buildResources = path.join(root, "wasm");
-
-  return [
-    ...walk(extensionResources).filter(filename => {
-      const basename = path.basename(filename);
-      return filename.startsWith(`${browserFsResources}${path.sep}`) ||
-        filename.startsWith(`${mupdfResources}${path.sep}`) ||
-        filename.startsWith(`${texLiveResources}${path.sep}`) ||
-        filename.endsWith(".wasm") ||
-        basename === "index.json" ||
-        (filename.startsWith(`${extensionScripts}${path.sep}`) &&
-          /\.(?:m?js)$/.test(filename));
-    }),
-    ...walk(buildResources).filter(filename => {
-      const basename = path.basename(filename);
-      return filename.endsWith(".bc") ||
-        filename.endsWith(".wasm") ||
-        basename === "pdflatex.js";
-    })
-  ].map(filename => path.relative(root, filename).split(path.sep).join("/"));
+  const mathJaxResources = path.join(
+    root,
+    "chrome-extension",
+    "resources",
+    "mathjax"
+  );
+  return walk(mathJaxResources)
+    .map(filename => path.relative(root, filename).split(path.sep).join("/"));
 }
 
 function requireText(value, location) {
@@ -181,7 +164,7 @@ function verifyArtifacts({
 
   for (const artifact of discoverProtectedArtifacts(root)) {
     if (!listed.has(artifact))
-      fail(`Generated artifact is not locked: ${artifact}`);
+      fail(`Vendored artifact is not locked: ${artifact}`);
   }
 
   for (const mirror of lock.mirrors || []) {
@@ -194,7 +177,7 @@ function verifyArtifacts({
   }
 
   if (!quiet)
-    console.log(`Verified ${verified} generated artifacts.`);
+    console.log(`Verified ${verified} vendored artifacts.`);
   return { verified };
 }
 

@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "TeX for Gmail (WebAssembly)",
-  "short_name": "TeX for Gmail",
-  "description": "Render LaTeX as images in Gmail using a local WebAssembly compiler.",
+  "name": "TeX for Gmail",
+  "short_name": "TeX Gmail",
+  "description": "Render LaTeX as images in Gmail with local, private processing.",
   "version": "1.0.0",
   "author": "TomasOrtega",
   "homepage_url": "https://github.com/TomasOrtega/TeX-for-Gmail",
@@ -11,25 +11,11 @@
     "96": "icons/icon.svg"
   },
   "permissions": [
-    "contextMenus",
     "https://mail.google.com/*"
   ],
   "background": {
     "page": "src/background.html",
     "persistent": false
-  },
-  "browser_action": {
-    "default_icon": "icons/icon.svg",
-    "default_title": "Insert LaTeX",
-    "default_popup": "popup/popup.html"
-  },
-  "commands": {
-    "render-selection": {
-      "suggested_key": {
-        "default": "Alt+Shift+L"
-      },
-      "description": "Render the selected LaTeX in Gmail"
-    }
   },
   "content_scripts": [
     {
@@ -41,7 +27,6 @@
         "src/contentscr.css"
       ],
       "js": [
-        "src/utils.js",
         "src/communicator.js",
         "src/portwrapper.js",
         "src/latex.js",
@@ -49,10 +34,10 @@
       ]
     }
   ],
-  "content_security_policy": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data:; style-src 'self'; worker-src 'self'; object-src 'none'",
+  "content_security_policy": "default-src 'none'; script-src 'self'; connect-src 'none'; img-src 'self' data: blob:; style-src 'self' 'sha256-e5jd7xQq9aULFFMD0eTEu9T1k/67HYr2XT/IFRaDiI0=' 'sha256-3ZSLWaOQtqrQ6iNoyQlBEIKBi4iPfnn6qanv5SmcYbg=' 'sha256-bgFI+8WNpZyQTg52T+OSNh5Vbm0kkPnj/kOliAUyReE=' 'sha256-khzm1f0RgYGW/mmWtJrCL6sPH/UAtSpOwXMy3ZMP/7g='; object-src 'none'",
   "browser_specific_settings": {
     "gecko": {
-      "id": "tex-for-gmail-wasm@tomasortega",
+      "id": "tex-for-gmail@tomasortega",
       "strict_min_version": "142.0",
       "data_collection_permissions": {
         "required": [
