@@ -14,6 +14,7 @@ const {
   FIXTURE,
   INLINE_BREAK_FIXTURE,
   protocolConnection,
+  removeTemporaryTree,
   requirePng,
   terminateBrowser,
   waitForEvaluation
@@ -172,6 +173,31 @@ test("browser cleanup escalates from SIGTERM to SIGKILL and reaps", async () => 
 
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
   assert.equal(browser.exitCode, 137);
+});
+
+test("temporary profile cleanup retries transient directory races", async () => {
+  const removals = [];
+  const waits = [];
+  const transient = Object.assign(new Error("directory not empty"), {
+    code: "ENOTEMPTY"
+  });
+
+  await removeTemporaryTree("/tmp/tex-gmail-profile", {
+    attempts: 4,
+    removeTree(directory) {
+      removals.push(directory);
+      if (removals.length < 4)
+        throw transient;
+    },
+    retryDelayMs: 25,
+    wait(milliseconds) {
+      waits.push(milliseconds);
+      return Promise.resolve();
+    }
+  });
+
+  assert.deepEqual(removals, Array(4).fill("/tmp/tex-gmail-profile"));
+  assert.deepEqual(waits, [25, 25, 25]);
 });
 
 test("browser evaluation retries transient navigation context errors", async () => {

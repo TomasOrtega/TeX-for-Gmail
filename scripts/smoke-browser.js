@@ -54,6 +54,32 @@ function delay(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+async function removeTemporaryTree(directory, {
+  attempts = 21,
+  removeTree = target => fs.promises.rm(target, {
+    force: true,
+    maxRetries: 2,
+    recursive: true,
+    retryDelay: 100
+  }),
+  retryDelayMs = 250,
+  wait = delay
+} = {}) {
+  const transientErrors = new Set(["EACCES", "EBUSY", "ENOTEMPTY", "EPERM"]);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await removeTree(directory);
+      return;
+    } catch (error) {
+      if (error.code === "ENOENT")
+        return;
+      if (!transientErrors.has(error.code) || attempt === attempts)
+        throw error;
+    }
+    await wait(retryDelayMs);
+  }
+}
+
 function waitForBrowserExit(browser, timeoutMs) {
   if (browser.exitCode != null || browser.signalCode != null)
     return Promise.resolve(true);
@@ -1145,12 +1171,7 @@ async function smokeUnpackedExtension({
     try {
       await terminateBrowser(browser);
     } finally {
-      fs.rmSync(profile, {
-        force: true,
-        maxRetries: 5,
-        recursive: true,
-        retryDelay: 100
-      });
+      await removeTemporaryTree(profile);
     }
   }
 }
@@ -1268,18 +1289,8 @@ async function smokeBrowser({
     try {
       await terminateBrowser(browser);
     } finally {
-      fs.rmSync(harness, {
-        force: true,
-        maxRetries: 5,
-        recursive: true,
-        retryDelay: 100
-      });
-      fs.rmSync(profile, {
-        force: true,
-        maxRetries: 5,
-        recursive: true,
-        retryDelay: 100
-      });
+      await removeTemporaryTree(harness);
+      await removeTemporaryTree(profile);
     }
   }
 }
@@ -1301,6 +1312,7 @@ module.exports = {
   createHarness,
   findChrome,
   protocolConnection,
+  removeTemporaryTree,
   requirePng,
   smokeBrowser,
   terminateBrowser,
