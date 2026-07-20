@@ -26,6 +26,7 @@ function loadComposeContent(source, options = {}) {
   const requests = [];
   const timers = [];
   let connectCount = 0;
+  let sourceTokenCounter = 0;
 
   function dataKey(name) {
     return name.slice(5).replace(/-([a-z])/g, (_match, letter) =>
@@ -504,6 +505,14 @@ function loadComposeContent(source, options = {}) {
         });
       }
     },
+    crypto: {
+      randomUUID() {
+        sourceTokenCounter++;
+        return `00000000-0000-4000-8000-${
+          sourceTokenCounter.toString(16).padStart(12, "0")
+        }`;
+      }
+    },
     document,
     Image: FakeImage,
     InputEvent: class {
@@ -568,7 +577,14 @@ function loadComposeContent(source, options = {}) {
       scheduleToolbarSync: typeof scheduleToolbarSync === "undefined"
         ? undefined : scheduleToolbarSync,
       formattingAnchor: typeof formattingAnchor === "undefined"
-        ? undefined : formattingAnchor
+        ? undefined : formattingAnchor,
+      markRenderedImage: typeof markRenderedImage === "undefined"
+        ? undefined : markRenderedImage,
+      rememberedRenderedSourceCount:
+        typeof renderedSourcesByToken === "undefined"
+          ? undefined : () => renderedSourcesByToken.size,
+      sourceForRenderedImage: typeof sourceForRenderedImage === "undefined"
+        ? undefined : sourceForRenderedImage
     })`, context),
     bold,
     bootstrapMessages,
@@ -642,6 +658,11 @@ test("Gmail toolbar renders delimited math and restores it before deletion", asy
   assert.ok(image);
   assert.equal(image.alt, "Rendered math expression");
   assert.equal(image.dataset.texForGmailSource, undefined);
+  assert.match(
+    image.dataset.texForGmailSourceToken,
+    /^[0-9a-f-]{36}$/
+  );
+  assert.notEqual(image.dataset.texForGmailSourceToken, "$x^2$");
   assert.equal(image.contentEditable, "false");
 
   runtime.selection.addRange(runtime.makeRange(image.nextSibling, 0));
@@ -1156,6 +1177,95 @@ test("Gmail toolbar restores formulas from every editing boundary", async () => 
   const ordinaryDelete = deletion("deleteContentBackward");
   atStart.editor.dispatchEvent(ordinaryDelete);
   assert.equal(ordinaryDelete.defaultPrevented, false);
+});
+
+test("Gmail toolbar restores formulas after rendered images are cloned", async () => {
+  function replaceWithClone(runtime, image) {
+    const clone = runtime.createElement("img");
+    Object.assign(clone.dataset, image.dataset);
+    image.replaceWith(clone);
+    return clone;
+  }
+
+  const doubleClick = loadComposeContent("$x^2$");
+  await doubleClick.api.renderAllMathInEditor(doubleClick.editor);
+  const original = doubleClick.editor.querySelector(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  const clone = replaceWithClone(doubleClick, original);
+  const click = {
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    target: clone,
+    type: "dblclick"
+  };
+  doubleClick.editor.dispatchEvent(click);
+  assert.equal(click.defaultPrevented, true);
+  assert.equal(doubleClick.editor.textContent, "$x^2$");
+
+  const deletion = loadComposeContent("$y$");
+  await deletion.api.renderAllMathInEditor(deletion.editor);
+  const deletionOriginal = deletion.editor.querySelector(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  const deletionClone = replaceWithClone(deletion, deletionOriginal);
+  const offset = deletion.editor.childNodes.indexOf(deletionClone);
+  deletion.selection.addRange(
+    deletion.makeElementRange(deletion.editor, offset + 1)
+  );
+  const backwards = {
+    defaultPrevented: false,
+    inputType: "deleteContentBackward",
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    type: "beforeinput"
+  };
+  deletion.editor.dispatchEvent(backwards);
+  assert.equal(backwards.defaultPrevented, true);
+  assert.equal(deletion.editor.textContent, "$y$");
+});
+
+test("Gmail toolbar validates and bounds remembered formula sources", async () => {
+  const runtime = loadComposeContent("");
+  const first = runtime.createElement("img");
+  runtime.api.markRenderedImage(first, "$x_0$");
+  const firstToken = first.dataset.texForGmailSourceToken;
+
+  const malformed = runtime.createElement("img");
+  malformed.dataset.texForGmailRendered = "1";
+  malformed.dataset.texForGmailSourceToken = "__proto__";
+  assert.equal(runtime.api.sourceForRenderedImage(malformed), undefined);
+
+  const unknown = runtime.createElement("img");
+  unknown.dataset.texForGmailRendered = "1";
+  unknown.dataset.texForGmailSourceToken =
+    "ffffffff-ffff-4fff-bfff-ffffffffffff";
+  assert.equal(runtime.api.sourceForRenderedImage(unknown), undefined);
+
+  assert.throws(
+    () => runtime.api.markRenderedImage(
+      runtime.createElement("img"),
+      "x".repeat(latex.MAX_SOURCE_LENGTH + 1)
+    ),
+    /size limit/
+  );
+
+  for (let index = 1; index <= 500; index++) {
+    runtime.api.markRenderedImage(
+      runtime.createElement("img"),
+      `$x_${index}$`
+    );
+  }
+  assert.equal(runtime.api.rememberedRenderedSourceCount(), 500);
+  assert.equal(runtime.api.sourceForRenderedImage(first), "$x_0$");
+
+  const evictedClone = runtime.createElement("img");
+  evictedClone.dataset.texForGmailRendered = "1";
+  evictedClone.dataset.texForGmailSourceToken = firstToken;
+  assert.equal(runtime.api.sourceForRenderedImage(evictedClone), undefined);
 });
 
 test("Gmail toolbar activation tracks dynamically added compose windows", async () => {

@@ -17,6 +17,8 @@ const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
 const MATH_EXCLUDED_SELECTOR =
   '[contenteditable="false"], blockquote, .gmail_quote, ' +
   '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
+const RENDERED_SOURCE_TOKEN_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MATH_LINE_BREAK_TAGS = new Set(["DIV", "LI", "P", "PRE"]);
 const MATH_STREAM_BARRIER_TAGS = new Set([
   "AREA",
@@ -36,12 +38,14 @@ const MATH_STREAM_BARRIER_TAGS = new Set([
   "VIDEO"
 ]);
 const MAX_BATCH_EXPRESSIONS = 50;
+const MAX_REMEMBERED_RENDERED_SOURCES = 500;
 let rendererConnection;
 let statusTimer;
 let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
 const renderedSources = new WeakMap();
+const renderedSourcesByToken = new Map();
 
 async function getCommunicator() {
   if (rendererConnection)
@@ -189,9 +193,37 @@ function showStatus(message, state = "progress") {
   }
 }
 
+function rememberRenderedSource(token, source) {
+  while (renderedSourcesByToken.size >= MAX_REMEMBERED_RENDERED_SOURCES) {
+    const oldest = renderedSourcesByToken.keys().next().value;
+    renderedSourcesByToken.delete(oldest);
+  }
+  renderedSourcesByToken.set(token, source);
+}
+
+function newRenderedSourceToken() {
+  let token;
+  do {
+    token = crypto.randomUUID();
+  } while (renderedSourcesByToken.has(token));
+  return token;
+}
+
+function validRenderedSource(source) {
+  return typeof source === "string" &&
+    source.length > 0 &&
+    source.length <= TeXForGmail.MAX_SOURCE_LENGTH;
+}
+
 function markRenderedImage(image, original) {
+  if (!validRenderedSource(original))
+    throw new Error("The formula source is invalid or exceeds the size limit.");
+
+  const token = newRenderedSourceToken();
   renderedSources.set(image, original);
+  rememberRenderedSource(token, original);
   image.dataset.texForGmailRendered = "1";
+  image.dataset.texForGmailSourceToken = token;
   image.dataset.texForGmailVersion = "1";
 }
 
@@ -238,11 +270,21 @@ function isRenderedMathImage(node) {
 }
 
 function sourceForRenderedImage(image) {
-  const source = renderedSources.get(image);
-  if (typeof source !== "string" ||
-      source.length === 0 ||
-      source.length > TeXForGmail.MAX_SOURCE_LENGTH)
+  let source = renderedSources.get(image);
+  if (validRenderedSource(source))
+    return source;
+
+  const token = image?.dataset?.texForGmailSourceToken;
+  if (typeof token !== "string" ||
+      !RENDERED_SOURCE_TOKEN_PATTERN.test(token))
     return undefined;
+  source = renderedSourcesByToken.get(token);
+  if (!validRenderedSource(source))
+    return undefined;
+
+  renderedSources.set(image, source);
+  renderedSourcesByToken.delete(token);
+  renderedSourcesByToken.set(token, source);
   return source;
 }
 
