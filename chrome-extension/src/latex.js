@@ -39,44 +39,72 @@
     return { source, display, original };
   }
 
-  function isEscaped(value, index) {
-    let slashCount = 0;
-    for (let offset = index - 1;
-      offset >= 0 && value[offset] === "\\";
-      offset--)
-      slashCount++;
-    return slashCount % 2 === 1;
+  function indexDelimiters(value) {
+    const escaped = new Uint8Array(value.length);
+    const positions = {
+      "$": [],
+      "$$": [],
+      "\\)": [],
+      "\\]": []
+    };
+    let slashParity = 0;
+
+    for (let index = 0; index < value.length; index++) {
+      escaped[index] = slashParity;
+      if (!slashParity && value[index] === "$") {
+        if (value[index + 1] === "$")
+          positions["$$"].push(index);
+        else if (value[index - 1] !== "$")
+          positions["$"].push(index);
+      } else if (!slashParity && value[index] === "\\") {
+        if (value[index + 1] === ")")
+          positions["\\)"].push(index);
+        else if (value[index + 1] === "]")
+          positions["\\]"].push(index);
+      }
+      slashParity = value[index] === "\\" ? 1 - slashParity : 0;
+    }
+
+    return {
+      cursors: {
+        "$": 0,
+        "$$": 0,
+        "\\)": 0,
+        "\\]": 0
+      },
+      escaped,
+      positions
+    };
   }
 
-  function closingDelimiter(value, start, delimiter, singleDollar) {
-    for (let index = start;
-      index <= value.length - delimiter.length;
-      index++) {
-      if (!value.startsWith(delimiter, index) || isEscaped(value, index))
-        continue;
-      if (singleDollar &&
-          (value[index - 1] === "$" || value[index + 1] === "$"))
-        continue;
-      return index + delimiter.length;
-    }
-    return -1;
+  function closingDelimiter(delimiters, start, delimiter) {
+    const positions = delimiters.positions[delimiter];
+    let cursor = delimiters.cursors[delimiter];
+
+    while (cursor < positions.length && positions[cursor] < start)
+      cursor++;
+    delimiters.cursors[delimiter] = cursor;
+    return cursor < positions.length ?
+      positions[cursor] + delimiter.length :
+      -1;
   }
 
   function findDelimitedMath(value) {
     const input = String(value ?? "");
+    const delimiters = indexDelimiters(input);
     const expressions = [];
 
     for (let start = 0; start < input.length; start++) {
       let delimiter;
       let singleDollar = false;
-      if (input.startsWith("$$", start) && !isEscaped(input, start))
+      if (input.startsWith("$$", start) && !delimiters.escaped[start])
         delimiter = "$$";
-      else if (input.startsWith("\\[", start) && !isEscaped(input, start))
+      else if (input.startsWith("\\[", start) && !delimiters.escaped[start])
         delimiter = "\\[";
-      else if (input.startsWith("\\(", start) && !isEscaped(input, start))
+      else if (input.startsWith("\\(", start) && !delimiters.escaped[start])
         delimiter = "\\(";
       else if (input[start] === "$" &&
-               !isEscaped(input, start) &&
+               !delimiters.escaped[start] &&
                input[start - 1] !== "$" &&
                input[start + 1] !== "$") {
         delimiter = "$";
@@ -88,10 +116,9 @@
       const closing = delimiter === "\\[" ? "\\]" :
         delimiter === "\\(" ? "\\)" : delimiter;
       const end = closingDelimiter(
-        input,
+        delimiters,
         start + delimiter.length,
-        closing,
-        singleDollar
+        closing
       );
       if (end < 0)
         continue;
