@@ -81,6 +81,16 @@
           "sha256": "6701026e48cf34422be31829880638ad6941da24c84a7898065c0942cf0edcb6"
         },
         {
+          "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/monospace.js",
+          "size": 84041,
+          "sha256": "b64271dd9b017ca19caafc76864c3ac24a2b3968325d4b2bed6f17a405f9a578"
+        },
+        {
+          "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/sans-serif.js",
+          "size": 213273,
+          "sha256": "7a711f9813ad3e8c923c3c29d7c6e896bc0cf42f152c91fe4f2b96b81e3c5c69"
+        },
+        {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/shapes.js",
           "size": 106873,
           "sha256": "1ae8be611cb2c9ae1a447a2ebefaf81ee6f26ce9944a7be2d32941a210aa9b10"

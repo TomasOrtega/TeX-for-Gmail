@@ -37,6 +37,8 @@ test("browser smoke fixture covers the supported AMS and font features", () => {
     String.raw`\mathbb`,
     String.raw`\mathcal`,
     String.raw`\mathfrak`,
+    String.raw`\mathsf{x}`,
+    String.raw`\mathtt{x}`,
     String.raw`\operatorname`,
     String.raw`\rightsquigarrow`,
     String.raw`\text`,
@@ -53,6 +55,8 @@ test("browser smoke fixture covers the supported AMS and font features", () => {
     "fraktur.js",
     "latin.js",
     "math.js",
+    "monospace.js",
+    "sans-serif.js",
     "shapes.js",
     "symbols-b-i.js"
   ]);

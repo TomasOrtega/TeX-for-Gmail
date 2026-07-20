@@ -21,6 +21,8 @@ const DYNAMIC_FILES = Object.freeze([
   "fraktur.js",
   "latin.js",
   "math.js",
+  "monospace.js",
+  "sans-serif.js",
   "shapes.js",
   "symbols-b-i.js"
 ]);

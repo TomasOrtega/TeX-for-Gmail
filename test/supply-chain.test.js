@@ -135,6 +135,8 @@ test("packaged MathJax files exactly match pinned npm artifacts", () => {
       "mathjax-newcm-font/svg/dynamic/fraktur.js",
       "mathjax-newcm-font/svg/dynamic/latin.js",
       "mathjax-newcm-font/svg/dynamic/math.js",
+      "mathjax-newcm-font/svg/dynamic/monospace.js",
+      "mathjax-newcm-font/svg/dynamic/sans-serif.js",
       "mathjax-newcm-font/svg/dynamic/shapes.js",
       "mathjax-newcm-font/svg/dynamic/symbols-b-i.js",
       "tex-svg.js"

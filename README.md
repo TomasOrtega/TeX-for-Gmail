@@ -111,7 +111,7 @@ provenance are recorded in
 [`artifacts.lock.json`](artifacts.lock.json); validation rejects missing,
 changed, or unexpected vendored files.
 
-The extension packages only the 12 MathJax runtime, font, and license files
+The extension packages only the 14 MathJax runtime, font, and license files
 needed by its tested feature set—not either complete npm package. They remain
 local because extension stores prohibit remotely hosted executable code, and
 local files preserve offline rendering, privacy, and reproducible review.

@@ -39,6 +39,8 @@ const files = Object.freeze([
     "fraktur",
     "latin",
     "math",
+    "monospace",
+    "sans-serif",
     "shapes",
     "symbols-b-i"
   ].map(name => ({

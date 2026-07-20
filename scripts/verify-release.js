@@ -162,7 +162,7 @@ function verifyRelease({
     /(?:^|\/)(?:mupdfworker|pdftexworker|pdflatex)(?:\.|$)/
   ];
   const maxPackageFiles = 40;
-  const maxPackageBytes = 13 * 256 * 1024;
+  const maxPackageBytes = 14 * 256 * 1024;
   const targetResults = [];
   for (const target of TARGETS) {
     const config = getTargetConfig({ root, target });
