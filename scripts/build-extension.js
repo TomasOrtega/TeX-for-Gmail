@@ -15,9 +15,10 @@ const { verifyTargetZip } = require("./verify-zip.js");
 function buildTarget({
   root = path.join(__dirname, ".."),
   target,
+  trackedFiles,
   quiet = false
 }) {
-  const config = stageTarget({ root, target, quiet: true });
+  const config = stageTarget({ root, target, trackedFiles, quiet: true });
   const files = walkFiles(config.stageRoot);
   const archive = new AdmZip({ noSort: true });
 
@@ -35,6 +36,7 @@ function buildTarget({
   const result = verifyTargetZip({
     root,
     target,
+    trackedFiles,
     archivePath: config.archivePath,
     quiet: true
   });

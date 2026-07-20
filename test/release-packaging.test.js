@@ -51,6 +51,9 @@ test("source selection is an explicit safe subset of tracked files", () => {
     "coverage/lcov.info",
     "chrome-extension/src/background.js",
     "chrome-extension/build/intermediate.js",
+    "chrome-extension/debug.log",
+    "chrome-extension/Thumbs.db",
+    "chrome-extension/.vscode/settings.json",
     "chrome-extension/.env",
     "chrome-extension/.env.production",
     ".github/.env.production",
@@ -197,10 +200,16 @@ test("release builds targets before source and checksums", t => {
     root,
     quiet: true,
     trackedFiles: REQUIRED_SOURCE_FILES,
-    buildTargetFn({ root: fixtureRoot, target, quiet }) {
+    buildTargetFn({
+      root: fixtureRoot,
+      target,
+      quiet,
+      trackedFiles: targetFiles
+    }) {
       calls.push(target);
       assert.equal(fixtureRoot, root);
       assert.equal(quiet, true);
+      assert.deepEqual(targetFiles, REQUIRED_SOURCE_FILES);
       const archivePath = writeFile(
         root,
         `dist/tex-for-gmail-${target}-1.2.3.zip`,

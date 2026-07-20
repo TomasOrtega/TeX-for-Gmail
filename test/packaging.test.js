@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { execFileSync } = require("node:child_process");
 const AdmZip = require("adm-zip");
 const { buildTarget } = require("../scripts/build-extension.js");
 const {
@@ -183,5 +184,47 @@ test("target builds produce distinct deterministic ZIPs", t => {
       result.archivePath,
       getTargetConfig({ root, target }).archivePath
     );
+  }
+});
+
+test("target builds exclude untracked, ignored, and sensitive files", t => {
+  const root = createFixture(t);
+  writeFile(root, ".gitignore", "*.log\n.vscode/\nThumbs.db\n");
+  writeFile(root, "chrome-extension/release-debug.log", "debug output\n");
+  writeFile(
+    root,
+    "chrome-extension/.vscode/settings.json",
+    "{\"token\":\"secret\"}\n"
+  );
+  writeFile(root, "chrome-extension/Thumbs.db", "desktop metadata\n");
+  writeFile(root, "chrome-extension/reviewer.pem", "private key\n");
+
+  execFileSync("git", ["init", "--quiet"], { cwd: root });
+  execFileSync("git", [
+    "add",
+    ".gitignore",
+    "package.json",
+    "chrome-extension",
+    "targets"
+  ], { cwd: root });
+
+  for (const target of ["firefox", "chrome"]) {
+    const result = buildTarget({ root, target, quiet: true });
+    const entries = new Set(
+      new AdmZip(result.archivePath).getEntries().map(entry => entry.entryName)
+    );
+    for (const filename of [
+      ".vscode/settings.json",
+      "release-debug.log",
+      "reviewer.pem",
+      "Thumbs.db"
+    ]) {
+      assert.equal(entries.has(filename), false, `${target}: ${filename}`);
+      assert.equal(
+        fs.existsSync(path.join(root, "build", target, filename)),
+        false,
+        `${target} staging: ${filename}`
+      );
+    }
   }
 });
