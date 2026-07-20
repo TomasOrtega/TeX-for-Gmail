@@ -568,8 +568,8 @@ function loadComposeContent(source, options = {}) {
     },
     clearTimeout() {},
     Communicator: class {
-      constructor(wrapper) {
-        this.port = wrapper.target;
+      constructor(port) {
+        this.port = port;
       }
 
       request(_command, request) {
@@ -612,11 +612,6 @@ function loadComposeContent(source, options = {}) {
       FILTER_ACCEPT: 1,
       FILTER_REJECT: 2,
       SHOW_TEXT: 4
-    },
-    PortWrapper: class {
-      constructor(target) {
-        this.target = target;
-      }
     },
     Promise,
     queueMicrotask,

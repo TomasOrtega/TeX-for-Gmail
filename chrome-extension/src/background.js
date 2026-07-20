@@ -509,7 +509,7 @@ chrome.runtime.onConnect.addListener(port => {
     return;
   }
 
-  const comm = new Communicator(new PortWrapper(port));
+  const comm = new Communicator(port);
   ports.set(port, comm);
   setupMessageHandler(comm);
   port.onDisconnect.addListener(() => ports.delete(port));

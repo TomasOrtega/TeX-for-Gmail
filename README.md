@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/TomasOrtega/TeX-for-Gmail/actions/workflows/ci.yml/badge.svg)](https://github.com/TomasOrtega/TeX-for-Gmail/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/TomasOrtega/TeX-for-Gmail/actions/workflows/codeql.yml/badge.svg)](https://github.com/TomasOrtega/TeX-for-Gmail/actions/workflows/codeql.yml)
-[![Core line coverage](.github/badges/coverage.svg)](https://github.com/TomasOrtega/TeX-for-Gmail/actions/workflows/ci.yml)
 [![Firefox 142+](https://img.shields.io/badge/Firefox-142%2B-FF7139?logo=firefoxbrowser&logoColor=white)](targets/firefox/manifest.json)
 [![Chrome 116+](https://img.shields.io/badge/Chrome-116%2B-4285F4?logo=googlechrome&logoColor=white)](targets/chrome/manifest.json)
 [![Privacy: local processing](https://img.shields.io/badge/privacy-local%20processing-2ea44f)](PRIVACY.md)
@@ -60,13 +59,11 @@ npm run stage:firefox
 the coverage-gated test suite, lints the Firefox target, builds both targets,
 compares both ZIPs with their staged source trees, exercises the renderer under
 the production CSP in Chrome, and audits dependencies.
-After changing tests, run `npm run coverage:update` to refresh the committed
-coverage badge.
 
 Core coverage means every authored runtime JavaScript file under
 `chrome-extension/src/`. CI requires 100% line coverage for that complete set.
 Vendored renderer code and repository maintenance scripts are outside the
-runtime badge and have separate integrity and behavior checks.
+runtime coverage gate and have separate integrity and behavior checks.
 
 The authored extension source is shared under `chrome-extension/`. Target
 manifests live under `targets/firefox/` and `targets/chrome/`; generated staging

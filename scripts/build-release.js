@@ -5,12 +5,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const AdmZip = require("adm-zip");
 const { buildTarget } = require("./build-extension.js");
-const {
-  TARGETS,
-  ZIP_DOS_TIMESTAMP
-} = require("./extension-targets.js");
+const { writeDeterministicZip } = require("./deterministic-zip.js");
+const { TARGETS } = require("./extension-targets.js");
 const {
   compareNames,
   isSafeReleaseFile,
@@ -19,7 +16,6 @@ const {
   runGit
 } = require("./release-files.js");
 
-const ZIP_STORED_METHOD = 0;
 const SOURCE_FILES = Object.freeze(new Set([
   ".gitattributes",
   ".gitignore",
@@ -43,7 +39,6 @@ const SOURCE_DIRECTORIES = Object.freeze([
   "test/"
 ]);
 const REQUIRED_SOURCE_FILES = Object.freeze([
-  ".github/badges/coverage.svg",
   "LICENSE",
   "PRIVACY.md",
   "README.md",
@@ -58,11 +53,12 @@ const REQUIRED_SOURCE_FILES = Object.freeze([
   "package.json",
   "scripts/build-extension.js",
   "scripts/build-release.js",
-  "scripts/coverage-badge.js",
+  "scripts/deterministic-zip.js",
   "scripts/extension-targets.js",
   "scripts/generate-icons.js",
   "scripts/lint-extension.js",
   "scripts/release-files.js",
+  "scripts/runtime-sources.js",
   "scripts/smoke-browser.js",
   "scripts/stage-extension.js",
   "scripts/update-artifact-lock.js",
@@ -112,7 +108,7 @@ function readVersion(root) {
   return packageJson.version;
 }
 
-function addSourceEntry(archive, root, filename) {
+function readSourceFile(root, filename) {
   const absolute = path.join(root, ...filename.split("/"));
   let stats;
   try {
@@ -122,15 +118,7 @@ function addSourceEntry(archive, root, filename) {
   }
   if (stats.isSymbolicLink() || !stats.isFile())
     fail(`Tracked source path must be a regular file: ${filename}`);
-
-  const entry = archive.addFile(
-    filename,
-    fs.readFileSync(absolute),
-    "",
-    0o644
-  );
-  entry.header.timeval = ZIP_DOS_TIMESTAMP;
-  entry.header.method = ZIP_STORED_METHOD;
+  return fs.readFileSync(absolute);
 }
 
 function buildSourceArchive({
@@ -149,14 +137,10 @@ function buildSourceArchive({
   const selected = selectSourceFiles(
     trackedFiles === undefined ? listTrackedFiles({ root, git }) : trackedFiles
   );
-  const archive = new AdmZip({ noSort: true });
-
+  const files = new Map();
   for (const filename of selected)
-    addSourceEntry(archive, root, filename);
-
-  fs.mkdirSync(path.dirname(archivePath), { mode: 0o755, recursive: true });
-  fs.writeFileSync(archivePath, archive.toBuffer(), { mode: 0o644 });
-  fs.chmodSync(archivePath, 0o644);
+    files.set(filename, readSourceFile(root, filename));
+  writeDeterministicZip(archivePath, files);
 
   if (!quiet) {
     console.log(

@@ -7,11 +7,11 @@ const path = require("node:path");
 const { PassThrough } = require("node:stream");
 const test = require("node:test");
 const {
-  chromeArguments,
   connectPipe,
   DYNAMIC_FILES,
   extensionChromeArguments,
   FIXTURE,
+  gmailSmokeDocument,
   INLINE_BREAK_FIXTURE,
   protocolConnection,
   removeTemporaryTree,
@@ -22,8 +22,24 @@ const {
 
 const root = path.join(__dirname, "..");
 
-test("browser smoke covers the reported inline SVG break regression", () => {
+test("extension browser smoke covers renderer regressions in Gmail", () => {
   assert.equal(INLINE_BREAK_FIXTURE, String.raw`\mathcal{E} + 1 = 1`);
+  const document = gmailSmokeDocument();
+  assert.ok(document.includes('data-smoke-render="feature"'));
+  assert.ok(document.includes(String.raw`\begin{aligned}`));
+  for (const fixture of [
+    ["inline", String.raw`\(${INLINE_BREAK_FIXTURE}\)`],
+    ["inline-prefix", String.raw`\(\mathcal{E}\)`],
+    ["macro-baseline", String.raw`\(\frac{1}{2}\)`],
+    [
+      "macro-mutation",
+      String.raw`\(\renewcommand{\frac}[2]{X}\frac{1}{2}\)`
+    ],
+    ["macro-isolated", String.raw`\(\frac {1}{2}\)`]
+  ]) {
+    assert.ok(document.includes(`data-smoke-render="${fixture[0]}"`));
+    assert.ok(document.includes(fixture[1]));
+  }
 });
 
 test("browser smoke fixture covers the supported AMS and font features", () => {
@@ -110,16 +126,6 @@ test("browser smoke uses the trusted pipe for unpacked extension loading", () =>
     argument.startsWith("--load-extension=")), false);
   assert.equal(launchArguments.some(argument =>
     argument.startsWith("--disable-extensions-except=")), false);
-});
-
-test("browser renderer smoke keeps its loopback DevTools endpoint", () => {
-  const launchArguments = chromeArguments({
-    port: 9123,
-    profile: "/tmp/tex-gmail-renderer-profile"
-  });
-
-  assert.ok(launchArguments.includes("--remote-debugging-port=9123"));
-  assert.equal(launchArguments.includes("--remote-debugging-pipe"), false);
 });
 
 test("browser protocol commands have a bounded deadline", async () => {

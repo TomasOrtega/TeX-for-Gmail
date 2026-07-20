@@ -7,8 +7,8 @@ const path = require("node:path");
 const test = require("node:test");
 const zlib = require("node:zlib");
 const {
-  discoverCoreSources
-} = require("../scripts/coverage-badge.js");
+  discoverRuntimeSources
+} = require("../scripts/runtime-sources.js");
 
 const root = path.join(__dirname, "..");
 const extensionRoot = path.join(root, "chrome-extension");
@@ -135,7 +135,7 @@ function storedPngRows(filename) {
 }
 
 function authoredExtensionScripts(repositoryRoot = root) {
-  return discoverCoreSources(repositoryRoot)
+  return discoverRuntimeSources(repositoryRoot)
     .map(filename => path.join(repositoryRoot, filename));
 }
 

@@ -179,7 +179,7 @@ test("target builds produce distinct deterministic ZIPs", t => {
     );
     for (const entry of entries) {
       assert.equal(entry.header.fileAttr, 0o644, `${target}: ${entry.entryName}`);
-      assert.equal(entry.header.method, 0, `${target}: ${entry.entryName}`);
+      assert.equal(entry.header.method, 8, `${target}: ${entry.entryName}`);
       assert.equal(
         entry.header.timeval,
         ZIP_DOS_TIMESTAMP,

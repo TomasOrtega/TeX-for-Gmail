@@ -100,7 +100,7 @@ async function getCommunicator() {
 
   const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
   const connection = {
-    communicator: new Communicator(new PortWrapper(port)),
+    communicator: new Communicator(port),
     disconnected: false,
     port
   };

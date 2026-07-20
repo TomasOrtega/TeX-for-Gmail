@@ -2,11 +2,11 @@
 
 The local renderer contains exact, unmodified runtime files from:
 
-- **MathJax 4.1.2** (`@mathjax/src`), from
-  <https://github.com/mathjax/MathJax-src/tree/4.1.2>.
-- **MathJax New Computer Modern font 4.1.2**
+- **MathJax 4.1.3** (`@mathjax/src`), from
+  <https://github.com/mathjax/MathJax-src/tree/4.1.3>.
+- **MathJax New Computer Modern font 4.1.3**
   (`@mathjax/mathjax-newcm-font`), from
-  <https://github.com/mathjax/MathJax-fonts/tree/4.1.2>.
+  <https://github.com/mathjax/MathJax-fonts/tree/4.1.3>.
 
 Both packages use the Apache License 2.0. The complete license is packaged at
 `resources/mathjax/LICENSE`. Exact npm integrity values, file digests, and

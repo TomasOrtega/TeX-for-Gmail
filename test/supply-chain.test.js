@@ -85,14 +85,14 @@ test("production packages exclude the legacy rendering toolchain", () => {
 test("packaged MathJax files exactly match pinned npm artifacts", () => {
   const expectedPackages = new Map([
     [
-      "@mathjax/src@4.1.2",
-      "sha512-7z3mQCQu4YqC1XyO4hMRkNTO49+5ZN8VtvBYKx+" +
-        "aGIXuGrlUvEAQZzeN/gf3tqZuVU4AI2yf1nYrrL1+BrSxIQ=="
+      "@mathjax/src@4.1.3",
+      "sha512-rIrWquuBSoJuoMBdC/1qD+AUHTorlccPicoVy6P2" +
+        "xbUgnuDBpCcpbHtOAsB8L3hdCHtNBg92lF8e3Fz+pkcQbw=="
     ],
     [
-      "@mathjax/mathjax-newcm-font@4.1.2",
-      "sha512-lZHMjNP2XbABHA3kVn40rbse5ERUeMEmrGH03qLkCwxq4/" +
-        "5Z/eNLr0akw1MmQcqTwCbvkx1BFcmJ7RCfbRlw3Q=="
+      "@mathjax/mathjax-newcm-font@4.1.3",
+      "sha512-gzAB3dFHilHX1l5x2xUqRL+1jDQt3Fyza1DkEMVXWC4E" +
+        "8SvsGdlgEza47HYi2WhVcgfkvf4zgUGzuhbq3Pjlew=="
     ]
   ]);
   const mathJaxComponents = artifactLock.components.filter(component =>
@@ -120,7 +120,7 @@ test("packaged MathJax files exactly match pinned npm artifacts", () => {
     assert.equal(locked.license, "Apache-2.0");
   }
 
-  assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.2");
+  assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.3");
   const { check, files } = require("../scripts/vendor-mathjax.js");
   assert.equal(check(), files.length);
   assert.deepEqual(

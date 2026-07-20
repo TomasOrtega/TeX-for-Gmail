@@ -267,11 +267,6 @@ function loadBackground(options = {}) {
     })(),
     Number,
     Object,
-    PortWrapper: class {
-      constructor(target) {
-        this.target = target;
-      }
-    },
     Promise,
     queueMicrotask,
     setTimeout(callback, delay) {

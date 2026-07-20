@@ -138,7 +138,7 @@ test("source ZIPs have deterministic entries, metadata, and bytes", t => {
   );
   for (const entry of entries) {
     assert.equal(entry.header.fileAttr, 0o644);
-    assert.equal(entry.header.method, 0);
+    assert.equal(entry.header.method, 8);
     assert.equal(entry.header.timeval, ZIP_DOS_TIMESTAMP);
   }
   assert.equal(
@@ -295,6 +295,12 @@ test("release and Firefox reproduction scripts enforce their gates", () => {
     "node scripts/build-release.js --release"
   );
   const reproduce = packageJson.scripts["reproduce:firefox"];
+  const coverage = packageJson.scripts["test:coverage"];
+  assert.match(
+    coverage,
+    /--test-coverage-include="chrome-extension\/src\/\*\*\/\*\.js"/
+  );
+  assert.match(coverage, /--test-coverage-lines=100/);
   assert.match(reproduce, /vendor:mathjax:check/);
   assert.match(reproduce, /test:coverage/);
   assert.match(reproduce, /lint:firefox/);

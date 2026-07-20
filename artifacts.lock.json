@@ -3,11 +3,11 @@
   "components": [
     {
       "component": "MathJax",
-      "version": "4.1.2",
+      "version": "4.1.3",
       "license": "Apache-2.0",
-      "source": "https://github.com/mathjax/MathJax-src/tree/4.1.2",
-      "npmPackage": "@mathjax/src@4.1.2",
-      "npmIntegrity": "sha512-7z3mQCQu4YqC1XyO4hMRkNTO49+5ZN8VtvBYKx+aGIXuGrlUvEAQZzeN/gf3tqZuVU4AI2yf1nYrrL1+BrSxIQ==",
+      "source": "https://github.com/mathjax/MathJax-src/tree/4.1.3",
+      "npmPackage": "@mathjax/src@4.1.3",
+      "npmIntegrity": "sha512-rIrWquuBSoJuoMBdC/1qD+AUHTorlccPicoVy6P2xbUgnuDBpCcpbHtOAsB8L3hdCHtNBg92lF8e3Fz+pkcQbw==",
       "provenance": "scripts/vendor-mathjax.js copies exact files from the pinned npm package without modification.",
       "lockPaths": [
         "chrome-extension/resources/mathjax/LICENSE",
@@ -24,27 +24,27 @@
         {
           "path": "chrome-extension/resources/mathjax/input/tex/extensions/begingroup.js",
           "size": 4266,
-          "sha256": "a8e9ba998ed122add1d4949dea0df97499f45e6ec4ceaa4319bf89d8eec31ba8"
+          "sha256": "0f606d5a71301992e92d8697ccbf8318736110691d8a94303f3f254cd589421a"
         },
         {
           "path": "chrome-extension/resources/mathjax/input/tex/extensions/boldsymbol.js",
           "size": 2460,
-          "sha256": "c479234609b299d8c901be4a269e30f58537d259a519577326df607e7db58084"
+          "sha256": "baaabd9fb430fe4fdbfa9db74aa60b118dd650a68239280368abfd1bc30a0e10"
         },
         {
           "path": "chrome-extension/resources/mathjax/tex-svg.js",
-          "size": 1846372,
-          "sha256": "e201dba4a20191563337e7f95ebeef6724bd2fbdc079c431b4bb8ecdfc059c33"
+          "size": 1849625,
+          "sha256": "23c036deccc0f2374834a47e4032e452419f3ac027bf17e17c104e2746b19f4c"
         }
       ]
     },
     {
       "component": "MathJax New Computer Modern font",
-      "version": "4.1.2",
+      "version": "4.1.3",
       "license": "Apache-2.0",
-      "source": "https://github.com/mathjax/MathJax-fonts/tree/4.1.2",
-      "npmPackage": "@mathjax/mathjax-newcm-font@4.1.2",
-      "npmIntegrity": "sha512-lZHMjNP2XbABHA3kVn40rbse5ERUeMEmrGH03qLkCwxq4/5Z/eNLr0akw1MmQcqTwCbvkx1BFcmJ7RCfbRlw3Q==",
+      "source": "https://github.com/mathjax/MathJax-fonts/tree/4.1.3",
+      "npmPackage": "@mathjax/mathjax-newcm-font@4.1.3",
+      "npmIntegrity": "sha512-gzAB3dFHilHX1l5x2xUqRL+1jDQt3Fyza1DkEMVXWC4E8SvsGdlgEza47HYi2WhVcgfkvf4zgUGzuhbq3Pjlew==",
       "provenance": "scripts/vendor-mathjax.js copies exact SVG font data from the pinned npm package without modification.",
       "lockTrees": [
         "chrome-extension/resources/mathjax/mathjax-newcm-font"
@@ -53,52 +53,52 @@
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/arrows.js",
           "size": 224166,
-          "sha256": "d8ebbc4087e26c6c08a2d0a7d03fd5b7130065ed9ae42a844dba8d8348c39862"
+          "sha256": "fc9b7ab69c0eefafc4cff2a3a1607e512f0387d6b4edeb8b94fdb463286f9415"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/calligraphic.js",
           "size": 39877,
-          "sha256": "797af90f4d49fcd0b5086526c21abcd4d1fc826aa533409954b39abe54e927ec"
+          "sha256": "dda4bbba7fb159e31cef5a819e9a96d839ab0fc3bc358d303fbd7897e4a96497"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/double-struck.js",
           "size": 41826,
-          "sha256": "41dbfb264b37bcaf67a580ab6977431846e08476a0a4b59cfcbe8c28506957e6"
+          "sha256": "f102fa970da97f3cfa5adb8cd38ec6db24e3fe8571877bb1a89f512c1a3d788b"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/fraktur.js",
           "size": 76776,
-          "sha256": "834c6d2340e1a519b3d393cd20093c47dc3ef4c44e4417052b4b49cec7d98f86"
+          "sha256": "76e39aa8ca3f362c400c4fea40ed417660043dd0b83b72c7d802450058a759d0"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/latin.js",
           "size": 358681,
-          "sha256": "2b40c21360e17c41d06bd269a77d5e9bb4e41c525472bcac185d7c345e755f99"
+          "sha256": "3fe0a23251c9ca0ad0d49e1de473bca3219d34d6a74e1af99f8dde33ce542d2f"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/math.js",
           "size": 197074,
-          "sha256": "6701026e48cf34422be31829880638ad6941da24c84a7898065c0942cf0edcb6"
+          "sha256": "1168f21b95848ea80db254eb32fbc63481c351f9df238915643506d80a6dd8d9"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/monospace.js",
           "size": 84041,
-          "sha256": "b64271dd9b017ca19caafc76864c3ac24a2b3968325d4b2bed6f17a405f9a578"
+          "sha256": "fc22ed39fafbd7d30f8d3e8b7d350ddeb06434c4db1cb29f0bbe50c46fa9dfa4"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/sans-serif.js",
           "size": 213273,
-          "sha256": "7a711f9813ad3e8c923c3c29d7c6e896bc0cf42f152c91fe4f2b96b81e3c5c69"
+          "sha256": "4c325362331ce14feff7332631a2db37df8dd545e7eb62ef337e3a4be691d5be"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/shapes.js",
           "size": 106873,
-          "sha256": "1ae8be611cb2c9ae1a447a2ebefaf81ee6f26ce9944a7be2d32941a210aa9b10"
+          "sha256": "be4a606ac2b8321a87411d6c88e78ac2c46cbe06b42a68cc1d43c2d977e0e493"
         },
         {
           "path": "chrome-extension/resources/mathjax/mathjax-newcm-font/svg/dynamic/symbols-b-i.js",
           "size": 134477,
-          "sha256": "68447d2705718f451e71fcd78a6e857d2ac57470884049837c2c0e4b9de77fd9"
+          "sha256": "2656e50ad4b2094edce8f1364b75c7a0b7f8c50e49f354ba5f5e04b3769c62c9"
         }
       ]
     }

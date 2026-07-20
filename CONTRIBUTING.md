@@ -7,11 +7,10 @@ npm ci --ignore-scripts
 npm run validate
 ```
 
-Changes to rendering behavior should include a focused regression test. Run
-`npm run coverage:update` when coverage changes so the committed badge remains
-in sync. `npm run test:coverage` requires 100% line coverage for every
-first-party runtime JavaScript file in `chrome-extension/src/`. Do not exclude
-a runtime file to satisfy the gate.
+Changes to rendering behavior should include a focused regression test.
+`npm run test:coverage` requires 100% line coverage for every first-party
+runtime JavaScript file in `chrome-extension/src/`. Do not exclude a runtime
+file to satisfy the gate.
 
 The Firefox and Chrome packages are generated from the shared
 `chrome-extension/` tree plus the manifest in `targets/<browser>/`. Do not edit
