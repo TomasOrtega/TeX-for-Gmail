@@ -366,6 +366,30 @@ test("Chrome reports a failed forced renderer close", async () => {
   assert.deepEqual(runtime.warnings, ["forced close failed"]);
 });
 
+test("Chrome serializes an immediate retry behind renderer replacement", async () => {
+  let releaseClose;
+  const runtime = loadChromeServiceWorker({
+    closeDocument() {
+      return new Promise(resolve => {
+        releaseClose = resolve;
+      });
+    }
+  });
+
+  const restarting = requestRestart(runtime);
+  const ensuring = requestRenderer(runtime);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(runtime.closeCalls.length, 1);
+  assert.equal(runtime.createCalls.length, 0);
+  assert.equal(runtime.getContextsCalls(), 0);
+
+  releaseClose();
+  assert.deepEqual({ ...await restarting }, { ok: true });
+  assert.deepEqual({ ...await ensuring }, { ok: true });
+  assert.equal(runtime.createCalls.length, 1);
+});
+
 test("Chrome serializes renderer creation behind an in-progress close", async () => {
   let releaseClose;
   const runtime = loadChromeServiceWorker({

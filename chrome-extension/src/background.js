@@ -407,25 +407,26 @@ function failRenderer() {
     return;
   rendererFailed = true;
 
-  setTimeout(() => {
-    if (!IS_CHROME_OFFSCREEN) {
+  if (!IS_CHROME_OFFSCREEN) {
+    setTimeout(() => {
       globalThis.location.reload();
+    }, 0);
+    return;
+  }
+
+  Promise.resolve(chrome.runtime.sendMessage({
+    type: OFFSCREEN_RESTART_MESSAGE
+  })).then(response => {
+    if (response?.ok === true)
       return;
-    }
-    Promise.resolve(chrome.runtime.sendMessage({
-      type: OFFSCREEN_RESTART_MESSAGE
-    })).then(response => {
-      if (response?.ok === true)
-        return;
-      const message = response?.error ||
-        "The failed renderer could not be replaced.";
-      console.warn(message);
-      globalThis.location.reload();
-    }, error => {
-      console.warn(error.message);
-      globalThis.location.reload();
-    });
-  }, 0);
+    const message = response?.error ||
+      "The failed renderer could not be replaced.";
+    console.warn(message);
+    globalThis.location.reload();
+  }, error => {
+    console.warn(error.message);
+    globalThis.location.reload();
+  });
 }
 
 function isServiceWorkerSender(sender) {

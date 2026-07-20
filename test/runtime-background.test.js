@@ -634,7 +634,7 @@ test("Firefox reloads a failed renderer and rejects its queued work", async () =
   assert.equal(runtime.reloadCount(), 1);
 });
 
-test("Chrome replaces a renderer after its execution times out", async () => {
+test("Chrome initiates renderer replacement before reporting a timeout", async () => {
   let release;
   const runtime = loadBackground({
     manifestVersion: 3,
@@ -660,14 +660,13 @@ test("Chrome replaces a renderer after its execution times out", async () => {
     runtime.timers.some(timer => timer.delay === 5 * 60 * 1000),
     false
   );
-
-  const restart = runtime.timers.find(timer => timer.delay === 0);
-  assert.ok(restart);
-  restart.callback();
-  await Promise.resolve();
   assert.deepEqual(runtime.runtimeMessages.map(message => ({ ...message })), [{
     type: "tex-for-gmail:restart-renderer"
   }]);
+  assert.equal(
+    runtime.timers.some(timer => timer.delay === 0),
+    false
+  );
 
   release();
   await new Promise(resolve => setImmediate(resolve));
@@ -698,7 +697,6 @@ test("Chrome reloads locally when renderer replacement fails", async () => {
 
   runtime.timers.find(timer => timer.delay === 15000).callback();
   await assert.rejects(render, /timed out/i);
-  runtime.timers.find(timer => timer.delay === 0).callback();
   await Promise.resolve();
 
   assert.deepEqual(runtime.warnings, ["offscreen replacement failed"]);
@@ -720,7 +718,6 @@ test("Chrome reloads locally when renderer replacement fails", async () => {
   await new Promise(resolve => setImmediate(resolve));
   transportFailure.timers.find(timer => timer.delay === 15000).callback();
   await assert.rejects(failedRender, /timed out/i);
-  transportFailure.timers.find(timer => timer.delay === 0).callback();
   await Promise.resolve();
 
   assert.deepEqual(transportFailure.warnings, ["restart message failed"]);
