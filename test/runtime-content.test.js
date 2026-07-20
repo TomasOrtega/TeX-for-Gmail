@@ -258,13 +258,26 @@ function loadComposeContent(source, options = {}) {
     }
 
     deleteContents() {
-      const node = this.startContainer;
-      const parent = node.parentNode;
-      const after = new FakeText(node.data.slice(this.endOffset));
-      node.data = node.data.slice(0, this.startOffset);
-      this.after = after;
-      parent.insertBefore(after, node.nextSibling);
-      this.endContainer = node;
+      const start = this.startContainer;
+      const end = this.endContainer;
+      if (start === end) {
+        const after = new FakeText(start.data.slice(this.endOffset));
+        start.data = start.data.slice(0, this.startOffset);
+        this.after = after;
+        start.parentNode.insertBefore(after, start.nextSibling);
+      } else {
+        const textNodes = descendants(document.documentElement).filter(
+          node => node.nodeType === 3
+        );
+        const startIndex = textNodes.indexOf(start);
+        const endIndex = textNodes.indexOf(end);
+        start.data = start.data.slice(0, this.startOffset);
+        end.data = end.data.slice(this.endOffset);
+        for (let index = startIndex + 1; index < endIndex; index++)
+          textNodes[index].data = "";
+        this.after = start.nextSibling;
+      }
+      this.endContainer = start;
       this.endOffset = this.startOffset;
     }
 
@@ -677,6 +690,124 @@ test("Gmail toolbar renders numeric dollar-delimited expressions", async () => {
   );
 });
 
+test("Gmail toolbar renders math split across inline formatting", async () => {
+  const runtime = loadComposeContent("");
+  const strong = runtime.createElement("strong");
+  strong.append("^2 + y");
+  runtime.editor.append("Before $x", strong, "$ and $z$ after.");
+
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 2 }
+  );
+  assert.deepEqual(
+    runtime.requests.map(request => request.source),
+    ["x^2 + y", "z"]
+  );
+
+  const images = runtime.editor.querySelectorAll(
+    'img[data-tex-for-gmail-rendered="1"]'
+  );
+  assert.equal(images.length, 2);
+  runtime.editor.dispatchEvent({
+    preventDefault() {},
+    target: images[0],
+    type: "dblclick"
+  });
+  assert.match(runtime.editor.textContent, /\$x\^2 \+ y\$/);
+});
+
+test("Gmail toolbar renders multiline AMS math across Gmail line markup",
+  async () => {
+    const runtime = loadComposeContent("");
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const lineBreak = runtime.createElement("br");
+    firstLine.append(
+      String.raw`x &= 1 \\`,
+      lineBreak,
+      String.raw`y &= 2`
+    );
+    secondLine.append(String.raw`\end{aligned}$$`);
+    runtime.editor.append(
+      String.raw`$$\begin{aligned}`,
+      firstLine,
+      secondLine
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    const original = [
+      String.raw`$$\begin{aligned}`,
+      String.raw`x &= 1 \\`,
+      String.raw`y &= 2`,
+      String.raw`\end{aligned}$$`
+    ].join("\n");
+    assert.deepEqual(runtime.requests.map(request => ({
+      display: request.display,
+      source: request.source
+    })), [{
+      display: true,
+      source: original.slice(2, -2)
+    }]);
+    const image = runtime.editor.querySelector(
+      'img[data-tex-for-gmail-rendered="1"]'
+    );
+    assert.equal(
+      image.className,
+      "tex-for-gmail-image tex-for-gmail-display"
+    );
+    runtime.editor.dispatchEvent({
+      preventDefault() {},
+      target: image,
+      type: "dblclick"
+    });
+    assert.equal(runtime.editor.textContent, original);
+  });
+
+test("Gmail toolbar keeps unsafe content outside logical math streams",
+  async () => {
+    const runtime = loadComposeContent("");
+    const quote = runtime.createElement("blockquote");
+    quote.append("$quoted$");
+    const gmailQuote = runtime.createElement("span");
+    gmailQuote.className = "gmail_quote";
+    gmailQuote.append("$gmail$");
+    const locked = runtime.createElement("span");
+    locked.setAttribute("contenteditable", "false");
+    locked.append("$locked$");
+    const pending = runtime.createElement("span");
+    pending.dataset.texForGmailPending = "1";
+    pending.append("$pending$");
+    const rendered = runtime.createElement("span");
+    rendered.dataset.texForGmailRendered = "1";
+    rendered.append("$rendered$");
+    const atomic = runtime.createElement("img");
+    runtime.editor.append(
+      "$first$",
+      quote,
+      gmailQuote,
+      locked,
+      pending,
+      rendered,
+      String.raw`\(`,
+      atomic,
+      String.raw`crossed\)`,
+      "$last$"
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 2 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["first", "last"]
+    );
+  });
+
 test("Gmail toolbar keeps changed pending math editable", async () => {
   let resolveRender;
   const runtime = loadComposeContent("$x$", {
@@ -829,10 +960,17 @@ test("Gmail toolbar leaves excess formulas for the next batch", async () => {
     { ok: false, rendered: 50 }
   );
   assert.equal(runtime.requests.length, 50);
+  assert.equal(runtime.requests[0].source, "x_0");
+  assert.equal(runtime.requests.at(-1).source, "x_49");
   assert.match(
     runtime.document.querySelector("#tex-for-gmail-status").textContent,
     /Batch limit reached/
   );
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 1 }
+  );
+  assert.equal(runtime.requests.at(-1).source, "x_50");
 });
 
 test("Gmail toolbar recovers one restarting renderer and rejects bad images", async () => {

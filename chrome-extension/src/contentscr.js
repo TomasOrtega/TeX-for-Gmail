@@ -14,6 +14,27 @@ const GMAIL_EDITOR_SELECTOR =
 const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
 const RENDERED_IMAGE_SELECTOR = 'img[data-tex-for-gmail-rendered="1"]';
 const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
+const MATH_EXCLUDED_SELECTOR =
+  '[contenteditable="false"], blockquote, .gmail_quote, ' +
+  '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
+const MATH_LINE_BREAK_TAGS = new Set(["DIV", "LI", "P", "PRE"]);
+const MATH_STREAM_BARRIER_TAGS = new Set([
+  "AREA",
+  "AUDIO",
+  "BUTTON",
+  "CANVAS",
+  "EMBED",
+  "HR",
+  "IFRAME",
+  "IMG",
+  "INPUT",
+  "OBJECT",
+  "SCRIPT",
+  "SELECT",
+  "STYLE",
+  "TEXTAREA",
+  "VIDEO"
+]);
 const MAX_BATCH_EXPRESSIONS = 50;
 let rendererConnection;
 let statusTimer;
@@ -225,56 +246,118 @@ function sourceForRenderedImage(image) {
   return source;
 }
 
-function isMathTextNode(node, editor) {
-  const parent = node.parentElement;
-  return typeof node.data === "string" &&
-    node.data.length > 0 &&
-    parent &&
-    editor.contains(parent) &&
-    !parent.closest(
-      '[contenteditable="false"], blockquote, .gmail_quote, ' +
-      '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]'
-    );
+function logicalMathStreams(editor) {
+  const streams = [];
+  let stream = { segments: [], text: "" };
+
+  function finishStream() {
+    if (stream.text)
+      streams.push(stream);
+    stream = { segments: [], text: "" };
+  }
+
+  function appendText(node) {
+    if (!node.data)
+      return;
+    const start = stream.text.length;
+    stream.text += node.data;
+    stream.segments.push({
+      end: stream.text.length,
+      node,
+      start
+    });
+  }
+
+  function appendStructuralLineBreak() {
+    if (stream.text && !stream.text.endsWith("\n"))
+      stream.text += "\n";
+  }
+
+  function visit(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendText(node);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE)
+      return;
+
+    if (node.matches?.(MATH_EXCLUDED_SELECTOR)) {
+      finishStream();
+      return;
+    }
+    if (node.tagName === "BR") {
+      stream.text += "\n";
+      return;
+    }
+    if (node !== editor && MATH_STREAM_BARRIER_TAGS.has(node.tagName)) {
+      finishStream();
+      return;
+    }
+
+    const breaksLine = node !== editor &&
+      MATH_LINE_BREAK_TAGS.has(node.tagName);
+    if (breaksLine)
+      appendStructuralLineBreak();
+    for (const child of node.childNodes)
+      visit(child);
+    if (breaksLine)
+      appendStructuralLineBreak();
+  }
+
+  visit(editor);
+  finishStream();
+  return streams;
+}
+
+function expressionBoundary(stream, index, end) {
+  const character = end ? index - 1 : index;
+  const segment = stream.segments.find(candidate =>
+    candidate.start <= character && character < candidate.end
+  );
+  if (!segment)
+    return undefined;
+  return {
+    node: segment.node,
+    offset: index - segment.start
+  };
 }
 
 function delimitedMathInEditor(editor) {
   const expressions = [];
-  const walker = document.createTreeWalker(
-    editor,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        return isMathTextNode(node, editor)
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT;
-      }
-    }
-  );
-  let node;
-  while ((node = walker.nextNode())) {
-    const matches = TeXForGmail.findDelimitedMath(node.data);
-    for (let index = matches.length - 1; index >= 0; index--) {
+  for (const stream of logicalMathStreams(editor)) {
+    const matches = TeXForGmail.findDelimitedMath(stream.text);
+    for (const match of matches) {
       if (expressions.length === MAX_BATCH_EXPRESSIONS)
         return { expressions, truncated: true };
-      expressions.push({ ...matches[index], node });
+      const start = expressionBoundary(stream, match.start, false);
+      const end = expressionBoundary(stream, match.end, true);
+      if (!start || !end)
+        continue;
+      expressions.push({
+        ...match,
+        endNode: end.node,
+        endOffset: end.offset,
+        startNode: start.node,
+        startOffset: start.offset
+      });
     }
   }
   return { expressions, truncated: false };
 }
 
 function pendingMathExpression(expression, editor) {
-  if (!expression.node.isConnected ||
-      !editor.contains(expression.node) ||
-      expression.node.data.slice(expression.start, expression.end) !==
-        expression.text)
+  if (!expression.startNode.isConnected ||
+      !expression.endNode.isConnected ||
+      !editor.contains(expression.startNode) ||
+      !editor.contains(expression.endNode))
     return undefined;
 
   const pending = document.createElement("span");
   pending.dataset.texForGmailPending = "1";
   pending.textContent = expression.text;
   const range = document.createRange();
-  range.setStart(expression.node, expression.start);
-  range.setEnd(expression.node, expression.end);
+  range.setStart(expression.startNode, expression.startOffset);
+  range.setEnd(expression.endNode, expression.endOffset);
   range.deleteContents();
   range.insertNode(pending);
   return pending;
@@ -296,11 +379,15 @@ async function renderAllMathInEditor(editor) {
   let rendered = 0;
   try {
     showStatus("Rendering math…");
-    for (const expression of expressions) {
+    const pendingExpressions = [];
+    for (let index = expressions.length - 1; index >= 0; index--) {
+      const expression = expressions[index];
       const pending = pendingMathExpression(expression, editor);
-      if (!pending)
-        continue;
+      if (pending)
+        pendingExpressions.unshift({ expression, pending });
+    }
 
+    for (const { expression, pending } of pendingExpressions) {
       try {
         const normalized = TeXForGmail.normalizeInput(expression.text);
         const dataUrl = await compileWithRendererSession(
