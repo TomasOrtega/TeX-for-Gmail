@@ -13,6 +13,7 @@ const FIXTURE = fs.readFileSync(
   path.join(__dirname, "..", "test", "fixtures", "render-smoke.tex"),
   "utf8"
 ).trim();
+const INLINE_BREAK_FIXTURE = String.raw`\mathcal{E} + 1 = 1`;
 const DYNAMIC_FILES = Object.freeze([
   "arrows.js",
   "calligraphic.js",
@@ -175,6 +176,18 @@ globalThis.PortWrapper = class {};
 globalThis.__done = false;
 (async () => {
   try {
+    const inline = await compile2pngDataURL({
+      alpha: 1,
+      display: false,
+      scale: 2,
+      source: ${JSON.stringify(INLINE_BREAK_FIXTURE)}
+    });
+    const inlinePrefix = await compile2pngDataURL({
+      alpha: 1,
+      display: false,
+      scale: 2,
+      source: "\\\\mathcal{E}"
+    });
     const isolationRequest = {
       alpha: 1,
       display: false,
@@ -196,7 +209,11 @@ globalThis.__done = false;
       scale: 2,
       source: ${JSON.stringify(FIXTURE)}
     });
-    globalThis.__result = { dataUrl: response.payload.dataUrl };
+    globalThis.__result = {
+      dataUrl: response.payload.dataUrl,
+      inlineDataUrl: inline.payload.dataUrl,
+      inlinePrefixDataUrl: inlinePrefix.payload.dataUrl
+    };
   } catch (error) {
     globalThis.__result = { error: error.stack || error.message || String(error) };
   } finally {
@@ -300,6 +317,15 @@ async function smokeBrowser({
       throw new Error(result.error);
 
     const png = requirePng(result.dataUrl);
+    const inline = requirePng(result.inlineDataUrl);
+    const inlinePrefix = requirePng(result.inlinePrefixDataUrl);
+    if (inline.width <= inlinePrefix.width * 2) {
+      throw new Error(
+        "Inline SVG rendering omitted part of " +
+        `${JSON.stringify(INLINE_BREAK_FIXTURE)} ` +
+        `(${inline.width}px versus ${inlinePrefix.width}px prefix).`
+      );
+    }
     const localFailure = cdp.failedRequests.find(failure =>
       failure.url?.startsWith("file:")
     );
@@ -374,6 +400,7 @@ if (require.main === module) {
 module.exports = {
   DYNAMIC_FILES,
   FIXTURE,
+  INLINE_BREAK_FIXTURE,
   createHarness,
   findChrome,
   requirePng,

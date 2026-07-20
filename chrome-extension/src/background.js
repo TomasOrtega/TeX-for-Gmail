@@ -132,6 +132,11 @@ function mathJaxConfig() {
         }
       }
     },
+    output: {
+      linebreaks: {
+        inline: false
+      }
+    },
     startup: {
       typeset: false
     },

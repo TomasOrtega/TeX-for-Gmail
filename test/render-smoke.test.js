@@ -7,10 +7,15 @@ const test = require("node:test");
 const {
   DYNAMIC_FILES,
   FIXTURE,
+  INLINE_BREAK_FIXTURE,
   requirePng
 } = require("../scripts/smoke-browser.js");
 
 const root = path.join(__dirname, "..");
+
+test("browser smoke covers the reported inline SVG break regression", () => {
+  assert.equal(INLINE_BREAK_FIXTURE, String.raw`\mathcal{E} + 1 = 1`);
+});
 
 test("browser smoke fixture covers the supported AMS and font features", () => {
   assert.equal(

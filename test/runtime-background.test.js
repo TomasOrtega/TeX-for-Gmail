@@ -377,6 +377,10 @@ test("background renders validated MathJax SVG output as a PNG data URL", async 
     "moz-extension://test/resources/mathjax"
   );
   assert.equal(
+    runtime.mathJaxConfigs[0].output.linebreaks.inline,
+    false
+  );
+  assert.equal(
     runtime.mathJaxConfigs[0].tex.maxTemplateSubtitutions,
     10000
   );
