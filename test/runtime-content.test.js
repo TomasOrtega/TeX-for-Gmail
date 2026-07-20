@@ -108,8 +108,16 @@ function loadComposeContent(source, options = {}) {
       if (!siblings)
         return;
       const index = siblings.indexOf(this);
-      siblings[index] = node;
-      node.parentNode = this.parentNode;
+      if (node.nodeType === 11) {
+        const replacements = [...node.childNodes];
+        siblings.splice(index, 1, ...replacements);
+        for (const replacement of replacements)
+          replacement.parentNode = this.parentNode;
+        node.childNodes = [];
+      } else {
+        siblings[index] = node;
+        node.parentNode = this.parentNode;
+      }
       this.parentNode = undefined;
     }
   }
@@ -130,6 +138,25 @@ function loadComposeContent(source, options = {}) {
 
     set textContent(value) {
       this.data = value;
+    }
+  }
+
+  class FakeDocumentFragment extends FakeNode {
+    constructor() {
+      super(11);
+    }
+
+    append(...nodes) {
+      for (const node of nodes) {
+        const child = typeof node === "string" ? new FakeText(node) : node;
+        child.remove();
+        child.parentNode = this;
+        this.childNodes.push(child);
+      }
+    }
+
+    get textContent() {
+      return this.childNodes.map(node => node.textContent).join("");
     }
   }
 
@@ -280,6 +307,55 @@ function loadComposeContent(source, options = {}) {
       }
       this.endContainer = start;
       this.endOffset = this.startOffset;
+    }
+
+    extractContents() {
+      const fragment = new FakeDocumentFragment();
+      const start = this.startContainer;
+      const end = this.endContainer;
+      if (start === end) {
+        fragment.append(new FakeText(
+          start.data.slice(this.startOffset, this.endOffset)
+        ));
+        this.deleteContents();
+        return fragment;
+      }
+
+      if (start.parentNode === end.parentNode) {
+        const parent = start.parentNode;
+        const siblings = [...parent.childNodes];
+        const startIndex = siblings.indexOf(start);
+        const endIndex = siblings.indexOf(end);
+        fragment.append(new FakeText(start.data.slice(this.startOffset)));
+        for (const node of siblings.slice(startIndex + 1, endIndex))
+          fragment.append(node);
+        fragment.append(new FakeText(end.data.slice(0, this.endOffset)));
+        start.data = start.data.slice(0, this.startOffset);
+        end.data = end.data.slice(this.endOffset);
+        this.after = end;
+        this.endContainer = start;
+        this.endOffset = this.startOffset;
+        return fragment;
+      }
+
+      const textNodes = descendants(document.documentElement).filter(
+        node => node.nodeType === 3
+      );
+      const startIndex = textNodes.indexOf(start);
+      const endIndex = textNodes.indexOf(end);
+      const selected = textNodes
+        .slice(startIndex, endIndex + 1)
+        .map((node, index, nodes) => {
+          const from = index === 0 ? this.startOffset : 0;
+          const to = index === nodes.length - 1
+            ? this.endOffset
+            : node.data.length;
+          return node.data.slice(from, to);
+        })
+        .join("");
+      fragment.append(new FakeText(selected));
+      this.deleteContents();
+      return fragment;
     }
 
     insertNode(node) {
@@ -738,6 +814,58 @@ test("Gmail toolbar renders math split across inline formatting", async () => {
   assert.match(runtime.editor.textContent, /\$x\^2 \+ y\$/);
 });
 
+test("Gmail toolbar restores cross-node markup after a render failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const strong = runtime.createElement("strong");
+    const emphasis = runtime.createElement("em");
+    strong.append("^2");
+    emphasis.append(" + y");
+    runtime.editor.append("Before $x", strong, emphasis, "$ after.");
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(runtime.editor.textContent, "Before $x^2 + y$ after.");
+    assert.equal(runtime.editor.querySelector("strong").textContent, "^2");
+    assert.equal(runtime.editor.querySelector("em").textContent, " + y");
+    assert.equal(strong.parentNode, runtime.editor);
+    assert.equal(strong.nextSibling, emphasis);
+    assert.equal(emphasis.parentNode, runtime.editor);
+  });
+
+test("Gmail toolbar restores Gmail line markup after a render failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const line = runtime.createElement("div");
+    const strong = runtime.createElement("strong");
+    const lineBreak = runtime.createElement("br");
+    const emphasis = runtime.createElement("em");
+    strong.append("^2");
+    emphasis.append(" + y");
+    line.append(strong, lineBreak, emphasis);
+    runtime.editor.append("Before $$x", line, "$$ after.");
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(runtime.editor.textContent, "Before $$x^2 + y$$ after.");
+    assert.equal(line.parentNode, runtime.editor);
+    assert.deepEqual(line.childNodes, [strong, lineBreak, emphasis]);
+    assert.equal(strong.textContent, "^2");
+    assert.equal(emphasis.textContent, " + y");
+  });
+
 test("Gmail toolbar renders multiline AMS math across Gmail line markup",
   async () => {
     const runtime = loadComposeContent("");
@@ -786,6 +914,98 @@ test("Gmail toolbar renders multiline AMS math across Gmail line markup",
       type: "dblclick"
     });
     assert.equal(runtime.editor.textContent, original);
+  });
+
+test("Gmail toolbar does not join math across headings", async () => {
+  const runtime = loadComposeContent("");
+  const heading = runtime.createElement("h2");
+  heading.append("$inside$");
+  runtime.editor.append("$outside", heading, "outside$");
+
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: true, rendered: 1 }
+  );
+  assert.deepEqual(runtime.requests.map(request => request.source), ["inside"]);
+  assert.equal(runtime.editor.textContent, "$outsideoutside$");
+  assert.ok(
+    heading.querySelector('img[data-tex-for-gmail-rendered="1"]')
+  );
+});
+
+test("Gmail toolbar does not join math across table cells or rows",
+  async () => {
+    const runtime = loadComposeContent("");
+    const table = runtime.createElement("table");
+    const body = runtime.createElement("tbody");
+    const firstRow = runtime.createElement("tr");
+    const firstCell = runtime.createElement("td");
+    const secondCell = runtime.createElement("td");
+    const secondRow = runtime.createElement("tr");
+    const thirdCell = runtime.createElement("td");
+    firstCell.append("$left");
+    secondCell.append("right$");
+    thirdCell.append("$inside$");
+    firstRow.append(firstCell, secondCell);
+    secondRow.append(thirdCell);
+    body.append(firstRow, secondRow);
+    table.append(body);
+    runtime.editor.append(table);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    assert.deepEqual(runtime.requests.map(request => request.source), ["inside"]);
+    assert.equal(firstCell.textContent, "$left");
+    assert.equal(secondCell.textContent, "right$");
+    assert.ok(
+      thirdCell.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
+  });
+
+test("Gmail toolbar does not join math across list items or paragraphs",
+  async () => {
+    const runtime = loadComposeContent("");
+    const list = runtime.createElement("ul");
+    const firstItem = runtime.createElement("li");
+    const secondItem = runtime.createElement("li");
+    const thirdItem = runtime.createElement("li");
+    const firstParagraph = runtime.createElement("p");
+    const secondParagraph = runtime.createElement("p");
+    const thirdParagraph = runtime.createElement("p");
+    firstItem.append("$$list");
+    secondItem.append("cross$$");
+    thirdItem.append("$$inside-list$$");
+    firstParagraph.append("$$paragraph");
+    secondParagraph.append("cross$$");
+    thirdParagraph.append("$$inside-paragraph$$");
+    list.append(firstItem, secondItem, thirdItem);
+    runtime.editor.append(
+      list,
+      firstParagraph,
+      secondParagraph,
+      thirdParagraph
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 2 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["inside-list", "inside-paragraph"]
+    );
+    assert.equal(firstItem.textContent, "$$list");
+    assert.equal(secondItem.textContent, "cross$$");
+    assert.ok(
+      thirdItem.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
+    assert.equal(firstParagraph.textContent, "$$paragraph");
+    assert.equal(secondParagraph.textContent, "cross$$");
+    assert.ok(
+      thirdParagraph.querySelector('img[data-tex-for-gmail-rendered="1"]')
+    );
   });
 
 test("Gmail toolbar keeps unsafe content outside logical math streams",

@@ -19,7 +19,48 @@ const MATH_EXCLUDED_SELECTOR =
   '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
 const RENDERED_SOURCE_TOKEN_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const MATH_LINE_BREAK_TAGS = new Set(["DIV", "LI", "P", "PRE"]);
+const MATH_LINE_BREAK_TAGS = new Set(["DIV"]);
+const MATH_STREAM_BOUNDARY_TAGS = new Set([
+  "ADDRESS",
+  "ARTICLE",
+  "ASIDE",
+  "CAPTION",
+  "DD",
+  "DETAILS",
+  "DIALOG",
+  "DL",
+  "DT",
+  "FIELDSET",
+  "FIGCAPTION",
+  "FIGURE",
+  "FOOTER",
+  "FORM",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HEADER",
+  "HGROUP",
+  "LI",
+  "MAIN",
+  "MENU",
+  "NAV",
+  "OL",
+  "P",
+  "PRE",
+  "SECTION",
+  "SUMMARY",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TFOOT",
+  "TH",
+  "THEAD",
+  "TR",
+  "UL"
+]);
 const MATH_STREAM_BARRIER_TAGS = new Set([
   "AREA",
   "AUDIO",
@@ -335,6 +376,13 @@ function logicalMathStreams(editor) {
       finishStream();
       return;
     }
+    if (node !== editor && MATH_STREAM_BOUNDARY_TAGS.has(node.tagName)) {
+      finishStream();
+      for (const child of node.childNodes)
+        visit(child);
+      finishStream();
+      return;
+    }
 
     const breaksLine = node !== editor &&
       MATH_LINE_BREAK_TAGS.has(node.tagName);
@@ -400,9 +448,9 @@ function pendingMathExpression(expression, editor) {
   const range = document.createRange();
   range.setStart(expression.startNode, expression.startOffset);
   range.setEnd(expression.endNode, expression.endOffset);
-  range.deleteContents();
+  const original = range.extractContents();
   range.insertNode(pending);
-  return pending;
+  return { original, pending };
 }
 
 async function renderAllMathInEditor(editor) {
@@ -424,12 +472,12 @@ async function renderAllMathInEditor(editor) {
     const pendingExpressions = [];
     for (let index = expressions.length - 1; index >= 0; index--) {
       const expression = expressions[index];
-      const pending = pendingMathExpression(expression, editor);
-      if (pending)
-        pendingExpressions.unshift({ expression, pending });
+      const pendingExpression = pendingMathExpression(expression, editor);
+      if (pendingExpression)
+        pendingExpressions.unshift({ expression, ...pendingExpression });
     }
 
-    for (const { expression, pending } of pendingExpressions) {
+    for (const { expression, original, pending } of pendingExpressions) {
       try {
         const normalized = TeXForGmail.normalizeInput(expression.text);
         const dataUrl = await compileWithRendererSession(
@@ -457,7 +505,7 @@ async function renderAllMathInEditor(editor) {
         if (pending.isConnected &&
             editor.contains(pending) &&
             pending.textContent === expression.text)
-          pending.replaceWith(document.createTextNode(expression.text));
+          pending.replaceWith(original);
         else
           pending.removeAttribute("data-tex-for-gmail-pending");
       }
