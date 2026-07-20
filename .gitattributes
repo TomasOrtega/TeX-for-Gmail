@@ -1,7 +1,2 @@
-chrome-extension/resources/texlive/** -whitespace
-*.fmt binary
-*.pfb binary
-*.pfm binary
+* text=auto eol=lf
 *.png binary
-*.tfm binary
-*.wasm binary

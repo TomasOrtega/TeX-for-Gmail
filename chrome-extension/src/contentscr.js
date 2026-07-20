@@ -4,18 +4,27 @@ const extensionApi = globalThis.browser || globalThis.chrome;
 const RENDER_SCALE = 2;
 const MAX_IMAGE_DIMENSION = 4096;
 const MAX_IMAGE_PIXELS = 16 * 1024 * 1024;
-const MAX_ALT_LENGTH = 512;
 const MAX_PNG_BYTES = 8 * 1024 * 1024;
 const MAX_PNG_BASE64_LENGTH = Math.ceil(MAX_PNG_BYTES / 3) * 4;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
-let communicator;
-let savedRange;
+const RENDER_PORT_NAME = "tex-for-gmail-render";
+const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
+const GMAIL_EDITOR_SELECTOR =
+  '[g_editable="true"][contenteditable="true"][role="textbox"]';
+const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
+const RENDERED_IMAGE_SELECTOR = 'img[data-tex-for-gmail-rendered="1"]';
+const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
+const MAX_BATCH_EXPRESSIONS = 50;
+let rendererConnection;
 let statusTimer;
 let renderInProgress = false;
+let toolbarRefreshQueued = false;
+const configuredEditors = new WeakSet();
+const renderedSources = new WeakMap();
 
 async function getCommunicator() {
-  if (communicator)
-    return communicator;
+  if (rendererConnection)
+    return rendererConnection;
 
   const readiness = await extensionApi.runtime.sendMessage({
     type: "tex-for-gmail:ensure-renderer"
@@ -23,23 +32,71 @@ async function getCommunicator() {
   if (readiness?.ok !== true)
     throw new Error(readiness?.error || "The renderer could not be initialized.");
 
-  const port = extensionApi.runtime.connect({ name: random_id(64) });
-  communicator = new Communicator(new PortWrapper(port));
+  const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
+  const connection = {
+    communicator: new Communicator(new PortWrapper(port)),
+    disconnected: false,
+    port
+  };
+  rendererConnection = connection;
   port.onDisconnect.addListener(() => {
-    communicator = undefined;
+    connection.disconnected = true;
+    if (rendererConnection === connection)
+      rendererConnection = undefined;
   });
-  return communicator;
+  return connection;
 }
 
-async function compile2pngDataURL(srcCode, scale, alpha) {
-  const comm = await getCommunicator();
-  const response = await comm.request("compile2pngDataURL", {
-    srcCode,
-    scale,
-    alpha
-  });
+function closeCommunicator(connection) {
+  if (rendererConnection === connection)
+    rendererConnection = undefined;
+  if (!connection.disconnected) {
+    connection.disconnected = true;
+    connection.port.disconnect();
+  }
+}
 
+function rendererRestarted(error, connection) {
+  return connection.disconnected ||
+    error?.err === RENDERER_RESTARTING_ERROR;
+}
+
+async function requestPngDataUrl(connection, source, display, scale, alpha) {
+  const response = await connection.communicator.request(
+    "compile2pngDataURL",
+    {
+      source,
+      display,
+      scale,
+      alpha
+    }
+  );
   return requirePngDataUrl(response.dataUrl);
+}
+
+async function compileWithRendererSession(session, source, display, scale, alpha) {
+  let mayRetry = true;
+  while (true) {
+    const connection = session.connection || await getCommunicator();
+    session.connection = connection;
+    try {
+      return await requestPngDataUrl(connection, source, display, scale, alpha);
+    } catch (error) {
+      const retry = mayRetry && rendererRestarted(error, connection);
+      if (session.connection === connection)
+        session.connection = undefined;
+      closeCommunicator(connection);
+      if (!retry)
+        throw error;
+      mayRetry = false;
+    }
+  }
+}
+
+function closeRendererSession(session) {
+  if (session.connection)
+    closeCommunicator(session.connection);
+  session.connection = undefined;
 }
 
 function requirePngDataUrl(dataUrl) {
@@ -88,32 +145,7 @@ function editableForRange(range) {
   const element = container.nodeType === Node.ELEMENT_NODE
     ? container
     : container.parentElement;
-  return element?.closest?.('[contenteditable="true"]');
-}
-
-function rememberSelection() {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0)
-    return;
-
-  const range = selection.getRangeAt(0);
-  if (editableForRange(range))
-    savedRange = range.cloneRange();
-}
-
-function insertionRange() {
-  const selection = window.getSelection();
-  if (selection?.rangeCount) {
-    const current = selection.getRangeAt(0);
-    if (editableForRange(current))
-      return current.cloneRange();
-  }
-
-  if (savedRange?.commonAncestorContainer?.isConnected &&
-      editableForRange(savedRange))
-    return savedRange.cloneRange();
-
-  throw new Error("Place the cursor in a Gmail message first.");
+  return element?.closest?.(GMAIL_EDITOR_SELECTOR);
 }
 
 function showStatus(message, state = "progress") {
@@ -136,24 +168,22 @@ function showStatus(message, state = "progress") {
   }
 }
 
-function messageForError(error) {
-  if (typeof error === "string")
-    return error;
-  if (error?.err)
-    return messageForError(error.err);
-  if (error?.message)
-    return error.message;
-  return "LaTeX rendering failed.";
+function markRenderedImage(image, original) {
+  renderedSources.set(image, original);
+  image.dataset.texForGmailRendered = "1";
+  image.dataset.texForGmailVersion = "1";
 }
 
-function loadImage(dataUrl, original) {
+function loadImage(dataUrl, original, display = false) {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.alt = original.length <= MAX_ALT_LENGTH
-      ? original
-      : "Rendered LaTeX formula";
-    image.className = "tex-for-gmail-image";
+    image.alt = "Rendered math expression";
+    image.className = display
+      ? "tex-for-gmail-image tex-for-gmail-display"
+      : "tex-for-gmail-image";
     image.contentEditable = "false";
+    image.title = "Backspace, Delete, or double-click to edit";
+    markRenderedImage(image, original);
     image.addEventListener("load", () => {
       if (image.naturalWidth < 1 ||
           image.naturalHeight < 1 ||
@@ -174,84 +204,364 @@ function loadImage(dataUrl, original) {
   });
 }
 
-function insertImage(range, image) {
-  const editor = editableForRange(range);
-  if (!editor)
-    throw new Error("Place the cursor in a Gmail message first.");
-
-  const selection = window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(range);
-
-  if (!document.execCommand("insertHTML", false, image.outerHTML)) {
-    range.deleteContents();
-    range.insertNode(image);
-    range.setStartAfter(image);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
+function notifyEditorInput(editor, inputType) {
   editor.dispatchEvent(new InputEvent("input", {
     bubbles: true,
-    inputType: "insertFromPaste"
+    inputType
   }));
-  rememberSelection();
 }
 
-async function renderLatex({ latex, display } = {}) {
+function isRenderedMathImage(node) {
+  return node?.nodeType === Node.ELEMENT_NODE &&
+    node.matches?.(RENDERED_IMAGE_SELECTOR) === true;
+}
+
+function sourceForRenderedImage(image) {
+  const source = renderedSources.get(image);
+  if (typeof source !== "string" ||
+      source.length === 0 ||
+      source.length > TeXForGmail.MAX_SOURCE_LENGTH)
+    return undefined;
+  return source;
+}
+
+function isMathTextNode(node, editor) {
+  const parent = node.parentElement;
+  return typeof node.data === "string" &&
+    node.data.length > 0 &&
+    parent &&
+    editor.contains(parent) &&
+    !parent.closest(
+      '[contenteditable="false"], blockquote, .gmail_quote, ' +
+      '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]'
+    );
+}
+
+function delimitedMathInEditor(editor) {
+  const expressions = [];
+  const walker = document.createTreeWalker(
+    editor,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        return isMathTextNode(node, editor)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      }
+    }
+  );
+  let node;
+  while ((node = walker.nextNode())) {
+    const matches = TeXForGmail.findDelimitedMath(node.data);
+    for (let index = matches.length - 1; index >= 0; index--) {
+      if (expressions.length === MAX_BATCH_EXPRESSIONS)
+        return { expressions, truncated: true };
+      expressions.push({ ...matches[index], node });
+    }
+  }
+  return { expressions, truncated: false };
+}
+
+function pendingMathExpression(expression, editor) {
+  if (!expression.node.isConnected ||
+      !editor.contains(expression.node) ||
+      expression.node.data.slice(expression.start, expression.end) !==
+        expression.text)
+    return undefined;
+
+  const pending = document.createElement("span");
+  pending.dataset.texForGmailPending = "1";
+  pending.textContent = expression.text;
+  const range = document.createRange();
+  range.setStart(expression.node, expression.start);
+  range.setEnd(expression.node, expression.end);
+  range.deleteContents();
+  range.insertNode(pending);
+  return pending;
+}
+
+async function renderAllMathInEditor(editor) {
   if (renderInProgress)
     return { ok: false, error: "A LaTeX render is already in progress." };
 
-  renderInProgress = true;
-  let range;
-  try {
-    range = insertionRange();
-    const selectedText = range.toString();
-    const normalized = TeXForGmail.normalizeInput(
-      latex ?? selectedText,
-      typeof display === "boolean" ? display : undefined
-    );
-    const documentSource = TeXForGmail.buildDocument(normalized);
+  const { expressions, truncated } = delimitedMathInEditor(editor);
+  if (expressions.length === 0) {
+    showStatus("No delimited math found.", "error");
+    return { ok: true, rendered: 0 };
+  }
 
-    showStatus("Rendering LaTeX…");
-    const dataUrl = await compile2pngDataURL(
-      documentSource,
-      RENDER_SCALE,
-      1
+  renderInProgress = true;
+  const session = {};
+  let failures = 0;
+  let rendered = 0;
+  try {
+    showStatus("Rendering math…");
+    for (const expression of expressions) {
+      const pending = pendingMathExpression(expression, editor);
+      if (!pending)
+        continue;
+
+      try {
+        const normalized = TeXForGmail.normalizeInput(expression.text);
+        const dataUrl = await compileWithRendererSession(
+          session,
+          normalized.source,
+          normalized.display,
+          RENDER_SCALE,
+          1
+        );
+        const image = await loadImage(
+          dataUrl,
+          normalized.original,
+          normalized.display
+        );
+        if (!pending.isConnected ||
+            !editor.contains(pending) ||
+            pending.textContent !== expression.text) {
+          pending.removeAttribute("data-tex-for-gmail-pending");
+          continue;
+        }
+        pending.replaceWith(image);
+        rendered++;
+      } catch (error) {
+        failures++;
+        if (pending.isConnected &&
+            editor.contains(pending) &&
+            pending.textContent === expression.text)
+          pending.replaceWith(document.createTextNode(expression.text));
+        else
+          pending.removeAttribute("data-tex-for-gmail-pending");
+      }
+    }
+    if (rendered)
+      notifyEditorInput(editor, "insertReplacementText");
+    if (failures || truncated) {
+      const details = [];
+      if (failures)
+        details.push(`${failures} left as text`);
+      if (truncated)
+        details.push("Batch limit reached; click ∑ again for the rest");
+      showStatus(
+        `${rendered} expression${rendered === 1 ? "" : "s"} rendered. ` +
+        `${details.join(". ")}.`,
+        "error"
+      );
+      return { ok: false, rendered };
+    }
+    showStatus(
+      `${rendered} expression${rendered === 1 ? "" : "s"} rendered.`,
+      "success"
     );
-    const image = await loadImage(dataUrl, normalized.original);
-    insertImage(range, image);
-    showStatus("LaTeX inserted.", "success");
-    return { ok: true };
-  } catch (error) {
-    const message = messageForError(error);
-    showStatus(message, "error");
-    return { ok: false, error: message };
+    return { ok: true, rendered };
   } finally {
+    closeRendererSession(session);
     renderInProgress = false;
   }
 }
 
-document.addEventListener("selectionchange", rememberSelection);
-document.addEventListener("focusin", rememberSelection);
+function edgeNode(node, backwards) {
+  let current = node;
+  while (current?.nodeType === Node.ELEMENT_NODE && current.childNodes.length) {
+    current = current.childNodes[backwards
+      ? current.childNodes.length - 1
+      : 0];
+  }
+  return current;
+}
 
-extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== "tex-for-gmail:render")
+function siblingAtRangeBoundary(node, backwards, editor) {
+  for (let current = node; current && current !== editor;
+    current = current.parentNode) {
+    const sibling = backwards ? current.previousSibling : current.nextSibling;
+    if (sibling)
+      return edgeNode(sibling, backwards);
+  }
+  return undefined;
+}
+
+function imageAtDeletionBoundary(range, backwards, editor) {
+  const { startContainer, startOffset } = range;
+  if (startContainer.nodeType === Node.ELEMENT_NODE) {
+    const node = startContainer.childNodes[backwards
+      ? startOffset - 1
+      : startOffset];
+    return isRenderedMathImage(edgeNode(node, backwards))
+      ? edgeNode(node, backwards)
+      : undefined;
+  }
+  if (startContainer.nodeType !== Node.TEXT_NODE ||
+      (backwards && startOffset !== 0) ||
+      (!backwards && startOffset !== startContainer.data.length))
     return undefined;
 
-  const malformed =
-    (message.latex !== undefined && typeof message.latex !== "string") ||
-    (message.display !== undefined && typeof message.display !== "boolean");
-  const result = malformed
-    ? Promise.resolve({
-      ok: false,
-      error: "Malformed LaTeX render request."
-    })
-    : renderLatex(message);
-  result.then(
-    sendResponse,
-    error => sendResponse({ ok: false, error: messageForError(error) })
-  );
+  const node = siblingAtRangeBoundary(startContainer, backwards, editor);
+  return isRenderedMathImage(node) ? node : undefined;
+}
+
+function selectedMathImage(range) {
+  if (range.collapsed ||
+      range.startContainer !== range.endContainer ||
+      range.startContainer.nodeType !== Node.ELEMENT_NODE ||
+      range.endOffset !== range.startOffset + 1)
+    return undefined;
+  const node = range.startContainer.childNodes[range.startOffset];
+  return isRenderedMathImage(node) ? node : undefined;
+}
+
+function restoreRenderedImage(image, caretAtStart = false) {
+  const source = sourceForRenderedImage(image);
+  if (!source)
+    return false;
+
+  const editor = image.closest?.(GMAIL_EDITOR_SELECTOR);
+  if (!editor)
+    return false;
+  const selection = window.getSelection();
+  const selectionRange = document.createRange();
+  selectionRange.selectNode(image);
+  selection?.removeAllRanges();
+  selection?.addRange(selectionRange);
+  try {
+    if (document.execCommand("insertText", false, source) && !image.isConnected) {
+      if (caretAtStart) {
+        const range = selection?.rangeCount
+          ? selection.getRangeAt(0)
+          : undefined;
+        const text = range?.startContainer;
+        const start = range?.startOffset - source.length;
+        if (range?.collapsed && text?.nodeType === Node.TEXT_NODE &&
+            start >= 0 &&
+            text.data.slice(start, range.startOffset) === source) {
+          range.setStart(text, start);
+          range.collapse(true);
+        }
+      }
+      return true;
+    }
+  } catch {}
+
+  const text = document.createTextNode(source);
+  image.replaceWith(text);
+  const range = document.createRange();
+  range.setStart(text, caretAtStart ? 0 : source.length);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  notifyEditorInput(editor, "insertReplacementText");
   return true;
+}
+
+function handleEditorBeforeInput(editor, event) {
+  const backwards = event.inputType === "deleteContentBackward";
+  const forwards = event.inputType === "deleteContentForward";
+  if (!backwards && !forwards)
+    return;
+
+  const selection = window.getSelection();
+  if (!selection?.rangeCount)
+    return;
+  const range = selection.getRangeAt(0);
+  if (editableForRange(range) !== editor)
+    return;
+
+  const image = selectedMathImage(range) ||
+    (range.collapsed && imageAtDeletionBoundary(range, backwards, editor));
+  if (image && restoreRenderedImage(image, forwards))
+    event.preventDefault();
+}
+
+function handleEditorDoubleClick(event) {
+  const image = isRenderedMathImage(event.target)
+    ? event.target
+    : event.target?.closest?.(RENDERED_IMAGE_SELECTOR);
+  if (image && restoreRenderedImage(image))
+    event.preventDefault();
+}
+
+function configureGmailEditor(editor) {
+  if (configuredEditors.has(editor))
+    return;
+  configuredEditors.add(editor);
+  editor.addEventListener(
+    "beforeinput",
+    event => handleEditorBeforeInput(editor, event),
+    true
+  );
+  editor.addEventListener("dblclick", handleEditorDoubleClick);
+}
+
+function formattingAnchor(editor) {
+  let match;
+  for (const anchor of document.querySelectorAll(GMAIL_BOLD_SELECTOR)) {
+    const toolbar = anchor.closest?.('[role="toolbar"]');
+    if (!toolbar)
+      continue;
+
+    for (let scope = editor.parentElement; scope; scope = scope.parentElement) {
+      if (!scope.contains?.(toolbar))
+        continue;
+      const editors = scope.querySelectorAll?.(GMAIL_EDITOR_SELECTOR);
+      if (!editors || editors.length !== 1 || editors[0] !== editor)
+        break;
+      if (match)
+        return undefined;
+      match = anchor;
+      break;
+    }
+  }
+  return match;
+}
+
+function installGmailToolbarButton(editor) {
+  const anchor = formattingAnchor(editor);
+  const parent = anchor?.parentElement;
+  if (!parent || parent.querySelector(TOOLBAR_BUTTON_SELECTOR))
+    return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tex-for-gmail-toolbar-button";
+  button.dataset.texForGmailToolbarButton = "1";
+  button.setAttribute("aria-label", "Render math");
+  button.setAttribute("title", "Render delimited math");
+  button.textContent = "∑";
+  button.addEventListener("mousedown", event => event.preventDefault());
+  button.addEventListener("click", () => {
+    void renderAllMathInEditor(editor);
+  });
+  parent.insertBefore(button, anchor.nextSibling);
+  configureGmailEditor(editor);
+}
+
+function syncGmailToolbars() {
+  for (const editor of document.querySelectorAll(GMAIL_EDITOR_SELECTOR))
+    installGmailToolbarButton(editor);
+}
+
+function scheduleToolbarSync() {
+  if (toolbarRefreshQueued)
+    return;
+  toolbarRefreshQueued = true;
+  queueMicrotask(() => {
+    toolbarRefreshQueued = false;
+    syncGmailToolbars();
+  });
+}
+
+function startGmailToolbarIntegration() {
+  if (!document.body || typeof document.querySelectorAll !== "function")
+    return;
+  syncGmailToolbars();
+  if (typeof MutationObserver !== "function")
+    return;
+
+  new MutationObserver(scheduleToolbarSync).observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+document.addEventListener("focusin", () => {
+  scheduleToolbarSync();
 });
+startGmailToolbarIntegration();

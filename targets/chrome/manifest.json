@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "116",
-  "name": "TeX for Gmail (WebAssembly)",
-  "short_name": "TeX for Gmail",
-  "description": "Render LaTeX as images in Gmail using a local WebAssembly compiler.",
+  "name": "TeX for Gmail",
+  "short_name": "TeX Gmail",
+  "description": "Render LaTeX as images in Gmail with local, private processing.",
   "version": "1.0.0",
   "author": "TomasOrtega",
   "homepage_url": "https://github.com/TomasOrtega/TeX-for-Gmail",
@@ -14,7 +14,6 @@
     "128": "icons/icon-128.png"
   },
   "permissions": [
-    "contextMenus",
     "offscreen"
   ],
   "host_permissions": [
@@ -22,22 +21,6 @@
   ],
   "background": {
     "service_worker": "src/chrome-service-worker.js"
-  },
-  "action": {
-    "default_icon": {
-      "16": "icons/icon-16.png",
-      "32": "icons/icon-32.png"
-    },
-    "default_title": "Insert LaTeX",
-    "default_popup": "popup/popup.html"
-  },
-  "commands": {
-    "render-selection": {
-      "suggested_key": {
-        "default": "Alt+Shift+L"
-      },
-      "description": "Render the selected LaTeX in Gmail"
-    }
   },
   "content_scripts": [
     {
@@ -49,7 +32,6 @@
         "src/contentscr.css"
       ],
       "js": [
-        "src/utils.js",
         "src/communicator.js",
         "src/portwrapper.js",
         "src/latex.js",
@@ -58,7 +40,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data:; style-src 'self'; worker-src 'self'; object-src 'none'"
+    "extension_pages": "default-src 'none'; script-src 'self'; connect-src 'none'; img-src 'self' data: blob:; style-src 'self' 'sha256-e5jd7xQq9aULFFMD0eTEu9T1k/67HYr2XT/IFRaDiI0=' 'sha256-3ZSLWaOQtqrQ6iNoyQlBEIKBi4iPfnn6qanv5SmcYbg=' 'sha256-bgFI+8WNpZyQTg52T+OSNh5Vbm0kkPnj/kOliAUyReE=' 'sha256-khzm1f0RgYGW/mmWtJrCL6sPH/UAtSpOwXMy3ZMP/7g='; object-src 'none'"
   },
   "incognito": "not_allowed"
 }

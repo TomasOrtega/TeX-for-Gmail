@@ -51,4 +51,4 @@ for (const component of lock.components) {
 }
 
 fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
-console.log(`Locked ${total} generated and vendored artifacts.`);
+console.log(`Locked ${total} vendored artifacts.`);

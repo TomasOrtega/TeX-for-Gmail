@@ -39,21 +39,86 @@
     return { source, display, original };
   }
 
-  function buildDocument({ source, display }) {
-    const math = display ? `\\[${source}\\]` : `\\(${source}\\)`;
+  function isEscaped(value, index) {
+    let slashCount = 0;
+    for (let offset = index - 1;
+      offset >= 0 && value[offset] === "\\";
+      offset--)
+      slashCount++;
+    return slashCount % 2 === 1;
+  }
 
-    return [
-      "\\documentclass[preview,border=2pt]{standalone}",
-      "\\usepackage{amsmath,amssymb}",
-      "\\begin{document}",
-      math,
-      "\\end{document}"
-    ].join("\n");
+  function closingDelimiter(value, start, delimiter, singleDollar) {
+    for (let index = start;
+      index <= value.length - delimiter.length;
+      index++) {
+      if (!value.startsWith(delimiter, index) || isEscaped(value, index))
+        continue;
+      if (singleDollar &&
+          (value[index - 1] === "$" || value[index + 1] === "$"))
+        continue;
+      return index + delimiter.length;
+    }
+    return -1;
+  }
+
+  function findDelimitedMath(value) {
+    const input = String(value ?? "");
+    const expressions = [];
+
+    for (let start = 0; start < input.length; start++) {
+      let delimiter;
+      let singleDollar = false;
+      if (input.startsWith("$$", start) && !isEscaped(input, start))
+        delimiter = "$$";
+      else if (input.startsWith("\\[", start) && !isEscaped(input, start))
+        delimiter = "\\[";
+      else if (input.startsWith("\\(", start) && !isEscaped(input, start))
+        delimiter = "\\(";
+      else if (input[start] === "$" &&
+               !isEscaped(input, start) &&
+               input[start - 1] !== "$" &&
+               input[start + 1] !== "$") {
+        delimiter = "$";
+        singleDollar = true;
+      } else {
+        continue;
+      }
+
+      const closing = delimiter === "\\[" ? "\\]" :
+        delimiter === "\\(" ? "\\)" : delimiter;
+      const end = closingDelimiter(
+        input,
+        start + delimiter.length,
+        closing,
+        singleDollar
+      );
+      if (end < 0)
+        continue;
+
+      if (singleDollar &&
+          (/\s/.test(input[start + 1]) ||
+           /\s/.test(input[end - 2]) ||
+           /[\r\n]/.test(input.slice(start + 1, end - 1)))) {
+        start = end - 1;
+        continue;
+      }
+      const text = input.slice(start, end);
+      try {
+        normalizeInput(text);
+      } catch {
+        start = end - 1;
+        continue;
+      }
+      expressions.push({ end, start, text });
+      start = end - 1;
+    }
+    return expressions;
   }
 
   return {
+    findDelimitedMath,
     MAX_SOURCE_LENGTH,
-    normalizeInput,
-    buildDocument
+    normalizeInput
   };
 });

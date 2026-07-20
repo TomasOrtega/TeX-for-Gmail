@@ -32,9 +32,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Verify vendored dependencies
-        run: |
-          npm run vendor:browserfs:check
-          npm run vendor:mupdf:check
+        run: npm run vendor:mathjax:check
 
       - name: Verify generated icons
         run: npm run icons:check
@@ -56,6 +54,9 @@ jobs:
 
       - name: Verify built ZIP
         run: npm run verify:zip
+
+      - name: Smoke-test local rendering in Chrome
+        run: npm run smoke:browser
 
       - name: Audit dependencies
         run: npm run audit

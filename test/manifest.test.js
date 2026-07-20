@@ -8,6 +8,12 @@ const zlib = require("node:zlib");
 
 const root = path.join(__dirname, "..");
 const extensionRoot = path.join(root, "chrome-extension");
+const MATHJAX_STYLE_HASHES = [
+  "'sha256-e5jd7xQq9aULFFMD0eTEu9T1k/67HYr2XT/IFRaDiI0='",
+  "'sha256-3ZSLWaOQtqrQ6iNoyQlBEIKBi4iPfnn6qanv5SmcYbg='",
+  "'sha256-bgFI+8WNpZyQTg52T+OSNh5Vbm0kkPnj/kOliAUyReE='",
+  "'sha256-khzm1f0RgYGW/mmWtJrCL6sPH/UAtSpOwXMy3ZMP/7g='"
+];
 
 function readJson(filename) {
   return JSON.parse(fs.readFileSync(path.join(root, filename), "utf8"));
@@ -30,14 +36,9 @@ function contentSecurityDirectives(policy) {
 }
 
 function referencedFiles(manifest) {
-  const action = manifest.action || manifest.browser_action;
   return [
     ...Object.values(manifest.icons),
     manifest.background.page || manifest.background.service_worker,
-    action.default_popup,
-    ...(typeof action.default_icon === "string"
-      ? [action.default_icon]
-      : Object.values(action.default_icon)),
     ...manifest.content_scripts.flatMap(content => [
       ...(content.css || []),
       ...(content.js || [])
@@ -132,7 +133,6 @@ function storedPngRows(filename) {
 test("target manifests keep their shared product fields synchronized", () => {
   for (const key of [
     "author",
-    "commands",
     "content_scripts",
     "description",
     "homepage_url",
@@ -143,22 +143,31 @@ test("target manifests keep their shared product fields synchronized", () => {
     assert.deepEqual(chrome[key], firefox[key], `${key} differs`);
 
   assert.equal(firefox.content_scripts[0].run_at, "document_idle");
+  assert.ok(firefox.short_name.length <= 12);
   assert.deepEqual(firefox.content_scripts[0].matches, [
     "https://mail.google.com/*"
   ]);
+});
+
+test("target manifests expose only the Gmail compose-toolbar workflow", () => {
+  for (const manifest of [chrome, firefox]) {
+    assert.equal(manifest.action, undefined);
+    assert.equal(manifest.browser_action, undefined);
+    assert.equal(manifest.commands, undefined);
+    assert.equal(manifest.page_action, undefined);
+    assert.equal(manifest.permissions.includes("contextMenus"), false);
+  }
+  assert.equal(fs.existsSync(path.join(extensionRoot, "popup")), false);
 });
 
 test("Firefox target retains reviewed MV2 distribution metadata", () => {
   const gecko = firefox.browser_specific_settings?.gecko;
 
   assert.equal(firefox.manifest_version, 2);
-  assert.match(gecko?.id ?? "", /^[^@]+@[^@]+$/);
+  assert.equal(gecko?.id, "tex-for-gmail@tomasortega");
   assert.equal(gecko?.strict_min_version, "142.0");
   assert.deepEqual(gecko?.data_collection_permissions?.required, ["none"]);
-  assert.deepEqual(firefox.permissions, [
-    "contextMenus",
-    "https://mail.google.com/*"
-  ]);
+  assert.deepEqual(firefox.permissions, ["https://mail.google.com/*"]);
   assert.deepEqual(firefox.background, {
     page: "src/background.html",
     persistent: false
@@ -168,7 +177,7 @@ test("Firefox target retains reviewed MV2 distribution metadata", () => {
 test("Chrome target uses the minimum MV3 permissions and offscreen host", () => {
   assert.equal(chrome.manifest_version, 3);
   assert.equal(chrome.minimum_chrome_version, "116");
-  assert.deepEqual(chrome.permissions, ["contextMenus", "offscreen"]);
+  assert.deepEqual(chrome.permissions, ["offscreen"]);
   assert.deepEqual(chrome.host_permissions, [
     "https://mail.google.com/*"
   ]);
@@ -178,30 +187,26 @@ test("Chrome target uses the minimum MV3 permissions and offscreen host", () => 
   assert.equal(chrome.incognito, "not_allowed");
   assert.equal(chrome.browser_specific_settings, undefined);
   assert.equal(chrome.browser_action, undefined);
-  assert.equal(typeof chrome.action, "object");
+  assert.equal(chrome.action, undefined);
 });
 
-test("both targets apply a strict policy that permits packaged WebAssembly", () => {
+test("both targets apply a strict policy without WebAssembly evaluation", () => {
   const expected = {
-    "connect-src": ["'self'"],
+    "connect-src": ["'none'"],
     "default-src": ["'none'"],
-    "img-src": ["'self'", "data:"],
+    "img-src": ["'self'", "data:", "blob:"],
     "object-src": ["'none'"],
-    "script-src": ["'self'", "'wasm-unsafe-eval'"],
-    "style-src": ["'self'"],
-    "worker-src": ["'self'"]
+    "script-src": ["'self'"],
+    "style-src": ["'self'", ...MATHJAX_STYLE_HASHES]
   };
 
-  assert.deepEqual(
-    contentSecurityDirectives(firefox.content_security_policy),
-    expected
-  );
-  assert.deepEqual(
-    contentSecurityDirectives(
-      chrome.content_security_policy.extension_pages
-    ),
-    expected
-  );
+  for (const policy of [
+    firefox.content_security_policy,
+    chrome.content_security_policy.extension_pages
+  ]) {
+    assert.deepEqual(contentSecurityDirectives(policy), expected);
+    assert.doesNotMatch(policy, /wasm|unsafe-eval/i);
+  }
 });
 
 test("all manifest resources exist in the shared source tree", () => {
@@ -289,12 +294,23 @@ test("platform hosts load only their required shared scripts", () => {
   assert.match(chromeWorker, /importScripts\("controller\.js"\)/);
 });
 
-test("packaged scripts do not use dynamic code evaluation", () => {
-  const browserFs = fs.readFileSync(
-    path.join(extensionRoot, "resources", "scripts", "browserfs.min.js"),
-    "utf8"
+test("authored extension scripts do not use dynamic code evaluation", () => {
+  const authoredDirectories = ["src"];
+  const authoredScripts = authoredDirectories.flatMap(directory =>
+    fs.readdirSync(path.join(extensionRoot, directory))
+      .filter(filename => filename.endsWith(".js"))
+      .map(filename => path.join(extensionRoot, directory, filename))
   );
 
-  assert.doesNotMatch(browserFs, /\beval\s*\(/);
-  assert.doesNotMatch(browserFs, /\bFunction\s*\(\s*["']/);
+  for (const filename of authoredScripts) {
+    const source = fs.readFileSync(filename, "utf8");
+    const relative = path.relative(extensionRoot, filename);
+    assert.doesNotMatch(source, /\beval\s*\(/, relative);
+    assert.doesNotMatch(
+      source,
+      /\b(?:new\s+)?Function\s*\(\s*["']/,
+      relative
+    );
+    assert.doesNotMatch(source, /\bWebAssembly\b/, relative);
+  }
 });

@@ -68,22 +68,3 @@ test("PortWrapper maps runtime port events and message envelopes", () => {
   assert.equal(onMessage.listeners.size, 0);
   assert.equal(onDisconnect.listeners.size, 0);
 });
-
-test("random_id returns a decimal identifier with the requested entropy range", () => {
-  const randomId = loadScript(
-    "utils.js",
-    "random_id",
-    {
-      Math: {
-        pow: Math.pow,
-        random() {
-          return 0.5;
-        },
-        round: Math.round
-      }
-    }
-  );
-
-  assert.equal(randomId(4), "8");
-  assert.match(randomId(64), /^\d+$/);
-});
