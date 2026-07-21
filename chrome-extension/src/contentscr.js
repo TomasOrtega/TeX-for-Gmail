@@ -9,6 +9,8 @@ const MAX_PNG_BASE64_LENGTH = Math.ceil(MAX_PNG_BYTES / 3) * 4;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const RENDER_PORT_NAME = "tex-for-gmail-render";
 const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
+const RENDER_ITEM_CANCELLED = Symbol("render item cancelled");
+const RENDER_BATCH_CANCELLED = Symbol("render batch cancelled");
 const GMAIL_EDITOR_SELECTOR =
   '[g_editable="true"][contenteditable="true"][role="textbox"]';
 const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
@@ -88,10 +90,11 @@ const MATH_STREAM_BARRIER_TAGS = new Set([
 const MAX_BATCH_EXPRESSIONS = 50;
 const MAX_REMEMBERED_RENDERED_SOURCES = 500;
 let rendererConnection;
+let rendererConnectionPromise;
 let statusTimer;
-let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
+const editorsRendering = new WeakSet();
 const editorToolbarAssociations = new WeakMap();
 const pendingToolbarScopes = new Set();
 const toolbarButtonEditors = new WeakMap();
@@ -102,25 +105,41 @@ async function getCommunicator() {
   if (rendererConnection)
     return rendererConnection;
 
-  const readiness = await extensionApi.runtime.sendMessage({
-    type: "tex-for-gmail:ensure-renderer"
-  });
-  if (readiness?.ok !== true)
-    throw new Error(readiness?.error || "The renderer could not be initialized.");
+  if (!rendererConnectionPromise) {
+    rendererConnectionPromise = (async () => {
+      const readiness = await extensionApi.runtime.sendMessage({
+        type: "tex-for-gmail:ensure-renderer"
+      });
+      if (readiness?.ok !== true) {
+        throw new Error(
+          readiness?.error || "The renderer could not be initialized."
+        );
+      }
 
-  const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
-  const connection = {
-    communicator: new Communicator(port),
-    disconnected: false,
-    port
-  };
-  rendererConnection = connection;
-  port.onDisconnect.addListener(() => {
-    connection.disconnected = true;
-    if (rendererConnection === connection)
-      rendererConnection = undefined;
-  });
-  return connection;
+      const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
+      const connection = {
+        communicator: new Communicator(port),
+        disconnected: false,
+        port,
+        sessions: 0
+      };
+      rendererConnection = connection;
+      port.onDisconnect.addListener(() => {
+        connection.disconnected = true;
+        if (rendererConnection === connection)
+          rendererConnection = undefined;
+      });
+      return connection;
+    })();
+  }
+
+  const pending = rendererConnectionPromise;
+  try {
+    return await pending;
+  } finally {
+    if (rendererConnectionPromise === pending)
+      rendererConnectionPromise = undefined;
+  }
 }
 
 function closeCommunicator(connection) {
@@ -137,6 +156,29 @@ function rendererRestarted(error, connection) {
     error?.err === RENDERER_RESTARTING_ERROR;
 }
 
+async function acquireRendererSession(session) {
+  if (session.connection)
+    return session.connection;
+
+  const connection = await getCommunicator();
+  connection.sessions++;
+  session.connection = connection;
+  return connection;
+}
+
+function releaseRendererSession(session, retire = false, forceClose = false) {
+  const connection = session.connection;
+  if (!connection)
+    return;
+
+  session.connection = undefined;
+  connection.sessions--;
+  if (retire && rendererConnection === connection)
+    rendererConnection = undefined;
+  if (forceClose || connection.sessions === 0)
+    closeCommunicator(connection);
+}
+
 async function requestPngDataUrl(connection, source, display, scale, alpha) {
   const response = await connection.communicator.request(
     "compile2pngDataURL",
@@ -150,18 +192,28 @@ async function requestPngDataUrl(connection, source, display, scale, alpha) {
   return requirePngDataUrl(response.dataUrl);
 }
 
-async function compileWithRendererSession(session, source, display, scale, alpha) {
+async function compileWithRendererSession(
+  session,
+  source,
+  display,
+  scale,
+  alpha,
+  requestCancellation
+) {
   let mayRetry = true;
   while (true) {
-    const connection = session.connection || await getCommunicator();
-    session.connection = connection;
+    let cancellation = requestCancellation();
+    if (cancellation)
+      return cancellation;
+    const connection = await acquireRendererSession(session);
+    cancellation = requestCancellation();
+    if (cancellation)
+      return cancellation;
     try {
       return await requestPngDataUrl(connection, source, display, scale, alpha);
     } catch (error) {
       const retry = mayRetry && rendererRestarted(error, connection);
-      if (session.connection === connection)
-        session.connection = undefined;
-      closeCommunicator(connection);
+      releaseRendererSession(session, true, retry);
       if (!retry)
         throw error;
       mayRetry = false;
@@ -170,9 +222,7 @@ async function compileWithRendererSession(session, source, display, scale, alpha
 }
 
 function closeRendererSession(session) {
-  if (session.connection)
-    closeCommunicator(session.connection);
-  session.connection = undefined;
+  releaseRendererSession(session);
 }
 
 function requirePngDataUrl(dataUrl) {
@@ -602,8 +652,40 @@ function pendingMathExpression(expression, editor) {
   return { original, pending, transaction };
 }
 
+function pendingExpressionCancellation(item, editor) {
+  if (!editor.isConnected)
+    return RENDER_BATCH_CANCELLED;
+  if (!item.pending.isConnected ||
+      !editor.contains(item.pending) ||
+      item.pending.textContent !== item.expression.text)
+    return RENDER_ITEM_CANCELLED;
+}
+
+function requireCurrentPendingExpression(item, editor) {
+  const cancellation = pendingExpressionCancellation(item, editor);
+  if (cancellation)
+    throw cancellation;
+}
+
+function settlePendingExpression(item, editor) {
+  const { expression, original, pending, transaction } = item;
+  const remainsInEditor = editor.contains(pending);
+  if (remainsInEditor && pending.textContent === expression.text) {
+    if (!transaction?.restore())
+      pending.replaceWith(original);
+    return;
+  }
+
+  pending.removeAttribute("data-tex-for-gmail-pending");
+  transaction?.commit(remainsInEditor ? pending : undefined);
+}
+
+function renderCacheKey(source, display, scale, alpha) {
+  return JSON.stringify([source, display, scale, alpha]);
+}
+
 async function renderAllMathInEditor(editor) {
-  if (renderInProgress)
+  if (editorsRendering.has(editor))
     return { ok: false, error: "A LaTeX render is already in progress." };
 
   const { expressions, truncated } = delimitedMathInEditor(editor);
@@ -612,71 +694,120 @@ async function renderAllMathInEditor(editor) {
     return { ok: true, rendered: 0 };
   }
 
-  renderInProgress = true;
+  const preparedExpressions = expressions.map(expression => {
+    const normalized = TeXForGmail.normalizeInput(expression.text);
+    return {
+      cacheKey: renderCacheKey(
+        normalized.source,
+        normalized.display,
+        RENDER_SCALE,
+        1
+      ),
+      expression,
+      normalized
+    };
+  });
+
+  editorsRendering.add(editor);
+  const renderCache = new Map();
   const session = {};
+  let stopped = false;
   let failures = 0;
   let rendered = 0;
   try {
     showStatus("Rendering math…");
     const pendingExpressions = [];
-    for (let index = expressions.length - 1; index >= 0; index--) {
-      const expression = expressions[index];
-      const pendingExpression = pendingMathExpression(expression, editor);
+    for (let index = preparedExpressions.length - 1; index >= 0; index--) {
+      const prepared = preparedExpressions[index];
+      const pendingExpression = pendingMathExpression(
+        prepared.expression,
+        editor
+      );
       if (pendingExpression)
-        pendingExpressions.unshift({ expression, ...pendingExpression });
+        pendingExpressions.unshift({ ...prepared, ...pendingExpression });
     }
 
-    for (const {
-      expression,
-      original,
-      pending,
-      transaction
-    } of pendingExpressions) {
+    const remainingCacheUses = new Map();
+    for (const item of pendingExpressions) {
+      remainingCacheUses.set(
+        item.cacheKey,
+        (remainingCacheUses.get(item.cacheKey) || 0) + 1
+      );
+    }
+
+    for (let index = 0; index < pendingExpressions.length; index++) {
+      const item = pendingExpressions[index];
+      const { pending, transaction } = item;
+
+      const hasCachedDataUrl = renderCache.has(item.cacheKey);
+      let dataUrl = hasCachedDataUrl
+        ? renderCache.get(item.cacheKey)
+        : undefined;
+      const futureCacheUses = remainingCacheUses.get(item.cacheKey) - 1;
+      if (futureCacheUses === 0) {
+        remainingCacheUses.delete(item.cacheKey);
+        renderCache.delete(item.cacheKey);
+      } else {
+        remainingCacheUses.set(item.cacheKey, futureCacheUses);
+      }
+
       try {
-        const normalized = TeXForGmail.normalizeInput(expression.text);
-        const dataUrl = await compileWithRendererSession(
-          session,
-          normalized.source,
-          normalized.display,
-          RENDER_SCALE,
-          1
-        );
+        requireCurrentPendingExpression(item, editor);
+        const { normalized } = item;
+        if (!hasCachedDataUrl) {
+          dataUrl = await compileWithRendererSession(
+            session,
+            normalized.source,
+            normalized.display,
+            RENDER_SCALE,
+            1,
+            () => pendingExpressionCancellation(item, editor)
+          );
+          if (dataUrl === RENDER_ITEM_CANCELLED ||
+              dataUrl === RENDER_BATCH_CANCELLED)
+            throw dataUrl;
+          if (futureCacheUses > 0)
+            renderCache.set(item.cacheKey, dataUrl);
+        }
+
+        requireCurrentPendingExpression(item, editor);
+
         const image = await loadImage(
           dataUrl,
           normalized.original,
           normalized.display
         );
-        if (!pending.isConnected ||
-            !editor.contains(pending) ||
-            pending.textContent !== expression.text) {
-          pending.removeAttribute("data-tex-for-gmail-pending");
-          transaction?.commit(editor.contains(pending) ? pending : undefined);
-          continue;
-        }
+        requireCurrentPendingExpression(item, editor);
         pending.replaceWith(image);
         transaction?.commit(image);
         rendered++;
       } catch (error) {
-        failures++;
-        if (pending.isConnected &&
-            editor.contains(pending) &&
-            pending.textContent === expression.text) {
-          if (!transaction?.restore())
-            pending.replaceWith(original);
-        } else {
-          pending.removeAttribute("data-tex-for-gmail-pending");
-          transaction?.commit(editor.contains(pending) ? pending : undefined);
+        const cancelled = error === RENDER_ITEM_CANCELLED ||
+          error === RENDER_BATCH_CANCELLED;
+        if (!cancelled) {
+          failures++;
+          renderCache.delete(item.cacheKey);
+        }
+        if (error === RENDER_BATCH_CANCELLED || !editor.isConnected)
+          stopped = true;
+        settlePendingExpression(item, editor);
+        if (stopped) {
+          for (const remaining of pendingExpressions.slice(index + 1))
+            settlePendingExpression(remaining, editor);
+          break;
         }
       }
     }
-    if (rendered)
+    if (rendered && editor.isConnected)
       notifyEditorInput(editor, "insertReplacementText");
-    if (failures || truncated) {
+    if (failures || truncated || stopped) {
       const details = [];
       if (failures)
         details.push(`${failures} left as text`);
       if (truncated)
         details.push("Batch limit reached; click ∑ again for the rest");
+      if (stopped)
+        details.push("Compose window closed; rendering stopped");
       showStatus(
         `${rendered} expression${rendered === 1 ? "" : "s"} rendered. ` +
         `${details.join(". ")}.`,
@@ -691,7 +822,7 @@ async function renderAllMathInEditor(editor) {
     return { ok: true, rendered };
   } finally {
     closeRendererSession(session);
-    renderInProgress = false;
+    editorsRendering.delete(editor);
   }
 }
 
