@@ -28,7 +28,6 @@
       ],
       "js": [
         "src/communicator.js",
-        "src/portwrapper.js",
         "src/latex.js",
         "src/contentscr.js"
       ]

@@ -7,23 +7,58 @@ const path = require("node:path");
 const { PassThrough } = require("node:stream");
 const test = require("node:test");
 const {
-  chromeArguments,
   connectPipe,
   DYNAMIC_FILES,
   extensionChromeArguments,
   FIXTURE,
+  gmailSmokeDocument,
   INLINE_BREAK_FIXTURE,
   protocolConnection,
   removeTemporaryTree,
   requirePng,
+  STYLED_UNICODE_FIXTURES,
   terminateBrowser,
   waitForEvaluation
 } = require("../scripts/smoke-browser.js");
 
 const root = path.join(__dirname, "..");
 
-test("browser smoke covers the reported inline SVG break regression", () => {
+test("extension browser smoke covers renderer regressions in Gmail", () => {
   assert.equal(INLINE_BREAK_FIXTURE, String.raw`\mathcal{E} + 1 = 1`);
+  const document = gmailSmokeDocument();
+  assert.ok(document.includes('data-smoke-render="feature"'));
+  assert.ok(document.includes(String.raw`\begin{aligned}`));
+  for (const fixture of [
+    ["inline", String.raw`\(${INLINE_BREAK_FIXTURE}\)`],
+    ["inline-prefix", String.raw`\(\mathcal{E}\)`],
+    ["macro-baseline", String.raw`\(\frac{1}{2}\)`],
+    [
+      "macro-mutation",
+      String.raw`\(\renewcommand{\frac}[2]{X}\frac{1}{2}\)`
+    ],
+    ["macro-isolated", String.raw`\(\frac {1}{2}\)`],
+    ["multiline", "<div data-smoke-line=\"first\">$$x</div>"]
+  ]) {
+    assert.ok(document.includes(`data-smoke-render="${fixture[0]}"`));
+    assert.ok(document.includes(fixture[1]));
+  }
+  assert.deepEqual(STYLED_UNICODE_FIXTURES, [
+    { label: "unicode-normal", source: String.raw`\mathrm{é}` },
+    { label: "unicode-bold", source: String.raw`\mathbf{é}` },
+    { label: "unicode-italic", source: String.raw`\mathit{é}` },
+    {
+      label: "unicode-bold-italic",
+      source: String.raw`\boldsymbol{\mathit{é}}`
+    },
+    { label: "unicode-sans-serif", source: String.raw`\mathsf{é}` },
+    { label: "unicode-monospace", source: String.raw`\mathtt{é}` }
+  ]);
+  for (const { label, source } of STYLED_UNICODE_FIXTURES) {
+    assert.ok(document.includes(`data-smoke-render="${label}"`));
+    assert.ok(document.includes(`\\(${source}\\)`));
+  }
+  assert.ok(document.includes('data-smoke-line="second">+y$$</div>'));
+  assert.ok(document.includes('data-smoke-line="after">after</div>'));
 });
 
 test("browser smoke fixture covers the supported AMS and font features", () => {
@@ -63,8 +98,13 @@ test("browser smoke fixture covers the supported AMS and font features", () => {
     "double-struck.js",
     "fraktur.js",
     "latin.js",
+    "latin-b.js",
+    "latin-bi.js",
+    "latin-i.js",
     "math.js",
+    "monospace-l.js",
     "monospace.js",
+    "sans-serif-r.js",
     "sans-serif.js",
     "shapes.js",
     "symbols-b-i.js"
@@ -110,16 +150,6 @@ test("browser smoke uses the trusted pipe for unpacked extension loading", () =>
     argument.startsWith("--load-extension=")), false);
   assert.equal(launchArguments.some(argument =>
     argument.startsWith("--disable-extensions-except=")), false);
-});
-
-test("browser renderer smoke keeps its loopback DevTools endpoint", () => {
-  const launchArguments = chromeArguments({
-    port: 9123,
-    profile: "/tmp/tex-gmail-renderer-profile"
-  });
-
-  assert.ok(launchArguments.includes("--remote-debugging-port=9123"));
-  assert.equal(launchArguments.includes("--remote-debugging-pipe"), false);
 });
 
 test("browser protocol commands have a bounded deadline", async () => {

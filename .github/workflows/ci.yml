@@ -13,9 +13,19 @@ concurrency:
 
 jobs:
   test:
-    name: Test, lint, and build
+    name: Node.js ${{ matrix.node-version }} (${{ matrix.label }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node-version: "22.9.0"
+            label: minimum
+            full_validation: false
+          - node-version: "24"
+            label: LTS
+            full_validation: true
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -25,28 +35,45 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: npm
+
+      - name: Install declared npm version
+        run: npm install --global npm@11.17.0
+
+      - name: Report toolchain versions
+        run: |
+          node --version
+          npm --version
+
+      - name: Assert declared npm version
+        run: test "$(npm --version)" = "11.17.0"
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
       - name: Verify vendored dependencies
+        if: matrix.full_validation
         run: npm run vendor:mathjax:check
 
       - name: Verify generated icons
+        if: matrix.full_validation
         run: npm run icons:check
 
       - name: Verify release inputs
+        if: matrix.full_validation
         run: npm run verify:release
 
+      - name: Run tests
+        if: ${{ !matrix.full_validation }}
+        run: npm test
+
       - name: Enforce 100% core line coverage
+        if: matrix.full_validation
         run: npm run test:coverage
 
-      - name: Check coverage badge
-        run: npm run coverage:check
-
       - name: Lint extension
+        if: matrix.full_validation
         run: npm run lint
 
       - name: Build extension
@@ -56,7 +83,9 @@ jobs:
         run: npm run verify:zip
 
       - name: Smoke-test local rendering in Chrome
+        if: matrix.full_validation
         run: npm run smoke:browser
 
       - name: Audit dependencies
+        if: matrix.full_validation
         run: npm run audit

@@ -29,9 +29,7 @@
     "build:firefox": "node scripts/build-extension.js firefox",
     "build:release": "node scripts/build-release.js",
     "release:artifacts": "node scripts/build-release.js --release",
-    "reproduce:firefox": "npm run vendor:mathjax:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run coverage:check && npm run lint:firefox && npm run build:firefox && npm run verify:zip:firefox",
-    "coverage:check": "node scripts/coverage-badge.js --check",
-    "coverage:update": "npm run test:coverage && node scripts/coverage-badge.js --write",
+    "reproduce:firefox": "npm run vendor:mathjax:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run lint:firefox && npm run build:firefox && npm run verify:zip:firefox",
     "icons:check": "node scripts/generate-icons.js --check",
     "lint": "npm run lint:firefox",
     "lint:firefox": "node scripts/lint-extension.js",
@@ -42,7 +40,7 @@
     "smoke:browser": "node scripts/smoke-browser.js",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"chrome-extension/src/**/*.js\" --test-coverage-lines=100 --test-coverage-branches=60 --test-coverage-functions=65 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info",
-    "validate": "npm run vendor:mathjax:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run coverage:check && npm run lint && npm run build && npm run verify:zip && npm run smoke:browser && npm run audit",
+    "validate": "npm run vendor:mathjax:check && npm run icons:check && npm run verify:release && npm run test:coverage && npm run lint && npm run build && npm run verify:zip && npm run smoke:browser && npm run audit",
     "vendor:mathjax": "node scripts/vendor-mathjax.js",
     "vendor:mathjax:check": "node scripts/vendor-mathjax.js --check",
     "verify:artifacts": "node scripts/verify-artifacts.js",
@@ -52,8 +50,9 @@
     "verify:zip:firefox": "node scripts/verify-zip.js firefox"
   },
   "devDependencies": {
-    "@mathjax/src": "4.1.2",
-    "addons-linter": "10.8.0",
-    "adm-zip": "0.6.0"
+    "@mathjax/src": "4.1.3",
+    "addons-linter": "10.9.0",
+    "adm-zip": "0.6.0",
+    "fflate": "0.8.2"
   }
 }

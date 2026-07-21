@@ -89,22 +89,60 @@
       -1;
   }
 
-  function findDelimitedMath(value) {
+  function delimiterEscaped(value, index) {
+    let slashParity = 0;
+    for (let cursor = index - 1;
+      cursor >= 0 && value[cursor] === "\\";
+      cursor--)
+      slashParity = 1 - slashParity;
+    return Boolean(slashParity);
+  }
+
+  function boundedClosingDelimiter(value, start, delimiter, exhausted) {
+    if (exhausted.has(delimiter))
+      return -1;
+
+    for (let index = value.indexOf(delimiter, start);
+      index >= 0;
+      index = value.indexOf(delimiter, index + 1)) {
+      if (delimiterEscaped(value, index))
+        continue;
+      if (delimiter === "$" &&
+          (value[index - 1] === "$" || value[index + 1] === "$"))
+        continue;
+      return index + delimiter.length;
+    }
+    exhausted.add(delimiter);
+    return -1;
+  }
+
+  function findDelimitedMath(value, resultLimit = Infinity) {
     const input = String(value ?? "");
-    const delimiters = indexDelimiters(input);
+    if (resultLimit !== Infinity &&
+        (!Number.isSafeInteger(resultLimit) || resultLimit < 0))
+      throw new RangeError("Result limit must be a non-negative integer.");
+
     const expressions = [];
+    if (resultLimit === 0)
+      return expressions;
+    const bounded = resultLimit !== Infinity;
+    const delimiters = bounded ? undefined : indexDelimiters(input);
+    const exhausted = bounded ? new Set() : undefined;
+    const escaped = index => bounded
+      ? delimiterEscaped(input, index)
+      : Boolean(delimiters.escaped[index]);
 
     for (let start = 0; start < input.length; start++) {
       let delimiter;
       let singleDollar = false;
-      if (input.startsWith("$$", start) && !delimiters.escaped[start])
+      if (input.startsWith("$$", start) && !escaped(start))
         delimiter = "$$";
-      else if (input.startsWith("\\[", start) && !delimiters.escaped[start])
+      else if (input.startsWith("\\[", start) && !escaped(start))
         delimiter = "\\[";
-      else if (input.startsWith("\\(", start) && !delimiters.escaped[start])
+      else if (input.startsWith("\\(", start) && !escaped(start))
         delimiter = "\\(";
       else if (input[start] === "$" &&
-               !delimiters.escaped[start] &&
+               !escaped(start) &&
                input[start - 1] !== "$" &&
                input[start + 1] !== "$") {
         delimiter = "$";
@@ -115,11 +153,18 @@
 
       const closing = delimiter === "\\[" ? "\\]" :
         delimiter === "\\(" ? "\\)" : delimiter;
-      const end = closingDelimiter(
-        delimiters,
-        start + delimiter.length,
-        closing
-      );
+      const end = bounded
+        ? boundedClosingDelimiter(
+          input,
+          start + delimiter.length,
+          closing,
+          exhausted
+        )
+        : closingDelimiter(
+          delimiters,
+          start + delimiter.length,
+          closing
+        );
       if (end < 0)
         continue;
 
@@ -138,6 +183,8 @@
         continue;
       }
       expressions.push({ end, start, text });
+      if (expressions.length === resultLimit)
+        return expressions;
       start = end - 1;
     }
     return expressions;

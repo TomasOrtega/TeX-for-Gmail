@@ -11,6 +11,21 @@ const destinationRoot = path.join(
   "resources",
   "mathjax"
 );
+const { MathJaxNewcmFont } = require(
+  "@mathjax/mathjax-newcm-font/cjs/svg.js"
+);
+
+function dynamicFontNames() {
+  const names = Object.values(MathJaxNewcmFont.dynamicFiles)
+    .map(({ file }) => file);
+  if (!names.length ||
+      names.some(name => !/^[A-Za-z0-9-]+$/.test(name)) ||
+      new Set(names).size !== names.length) {
+    throw new Error("MathJax contains an invalid dynamic SVG font map.");
+  }
+  return names.sort();
+}
+
 const files = Object.freeze([
   {
     packageName: "@mathjax/src",
@@ -32,18 +47,7 @@ const files = Object.freeze([
     source: "LICENSE",
     destination: "LICENSE"
   },
-  ...[
-    "arrows",
-    "calligraphic",
-    "double-struck",
-    "fraktur",
-    "latin",
-    "math",
-    "monospace",
-    "sans-serif",
-    "shapes",
-    "symbols-b-i"
-  ].map(name => ({
+  ...dynamicFontNames().map(name => ({
     packageName: "@mathjax/mathjax-newcm-font",
     source: `svg/dynamic/${name}.js`,
     destination: `mathjax-newcm-font/svg/dynamic/${name}.js`

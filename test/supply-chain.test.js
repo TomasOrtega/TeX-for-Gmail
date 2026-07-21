@@ -85,14 +85,14 @@ test("production packages exclude the legacy rendering toolchain", () => {
 test("packaged MathJax files exactly match pinned npm artifacts", () => {
   const expectedPackages = new Map([
     [
-      "@mathjax/src@4.1.2",
-      "sha512-7z3mQCQu4YqC1XyO4hMRkNTO49+5ZN8VtvBYKx+" +
-        "aGIXuGrlUvEAQZzeN/gf3tqZuVU4AI2yf1nYrrL1+BrSxIQ=="
+      "@mathjax/src@4.1.3",
+      "sha512-rIrWquuBSoJuoMBdC/1qD+AUHTorlccPicoVy6P2" +
+        "xbUgnuDBpCcpbHtOAsB8L3hdCHtNBg92lF8e3Fz+pkcQbw=="
     ],
     [
-      "@mathjax/mathjax-newcm-font@4.1.2",
-      "sha512-lZHMjNP2XbABHA3kVn40rbse5ERUeMEmrGH03qLkCwxq4/" +
-        "5Z/eNLr0akw1MmQcqTwCbvkx1BFcmJ7RCfbRlw3Q=="
+      "@mathjax/mathjax-newcm-font@4.1.3",
+      "sha512-gzAB3dFHilHX1l5x2xUqRL+1jDQt3Fyza1DkEMVXWC4E" +
+        "8SvsGdlgEza47HYi2WhVcgfkvf4zgUGzuhbq3Pjlew=="
     ]
   ]);
   const mathJaxComponents = artifactLock.components.filter(component =>
@@ -120,28 +120,21 @@ test("packaged MathJax files exactly match pinned npm artifacts", () => {
     assert.equal(locked.license, "Apache-2.0");
   }
 
-  assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.2");
+  assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.3");
   const { check, files } = require("../scripts/vendor-mathjax.js");
   assert.equal(check(), files.length);
-  assert.deepEqual(
-    files.map(file => file.destination).sort(),
-    [
-      "LICENSE",
-      "input/tex/extensions/begingroup.js",
-      "input/tex/extensions/boldsymbol.js",
-      "mathjax-newcm-font/svg/dynamic/arrows.js",
-      "mathjax-newcm-font/svg/dynamic/calligraphic.js",
-      "mathjax-newcm-font/svg/dynamic/double-struck.js",
-      "mathjax-newcm-font/svg/dynamic/fraktur.js",
-      "mathjax-newcm-font/svg/dynamic/latin.js",
-      "mathjax-newcm-font/svg/dynamic/math.js",
-      "mathjax-newcm-font/svg/dynamic/monospace.js",
-      "mathjax-newcm-font/svg/dynamic/sans-serif.js",
-      "mathjax-newcm-font/svg/dynamic/shapes.js",
-      "mathjax-newcm-font/svg/dynamic/symbols-b-i.js",
-      "tex-svg.js"
-    ]
+  const { MathJaxNewcmFont } = require(
+    "@mathjax/mathjax-newcm-font/cjs/svg.js"
   );
+  const upstreamDynamicFiles = Object.values(MathJaxNewcmFont.dynamicFiles)
+    .map(({ file }) => `mathjax-newcm-font/svg/dynamic/${file}.js`)
+    .sort();
+  const vendoredDynamicFiles = files
+    .map(file => file.destination)
+    .filter(destination => destination.includes("/dynamic/"))
+    .sort();
+
+  assert.deepEqual(vendoredDynamicFiles, upstreamDynamicFiles);
 });
 
 test("Firefox tooling uses the fixed, compatible ZIP parser", t => {
@@ -175,6 +168,42 @@ test("release metadata and packaged files pass validation", () => {
   const { verifyRelease } = require("../scripts/verify-release.js");
 
   assert.doesNotThrow(() => verifyRelease({ root, quiet: true }));
+});
+
+test("release package budgets cap target counts and bytes", () => {
+  const {
+    PACKAGE_BUDGETS,
+    verifyPackageBudget
+  } = require("../scripts/verify-release.js");
+  const maxBytes = 46 * 256 * 1024;
+
+  assert.deepEqual(PACKAGE_BUDGETS, {
+    firefox: { files: 55, bytes: maxBytes },
+    chrome: { files: 59, bytes: maxBytes }
+  });
+  for (const [target, budget] of Object.entries(PACKAGE_BUDGETS)) {
+    const files = new Map(Array.from(
+      { length: budget.files },
+      (_, index) => [`file-${index}`, Buffer.alloc(index ? 0 : budget.bytes)]
+    ));
+    assert.deepEqual(verifyPackageBudget(target, files), {
+      bytes: budget.bytes,
+      files: budget.files,
+      target
+    });
+
+    files.set("one-file-too-many", Buffer.alloc(0));
+    assert.throws(
+      () => verifyPackageBudget(target, files),
+      new RegExp(`${target} package exceeds the ${budget.files}-file budget`)
+    );
+    assert.throws(
+      () => verifyPackageBudget(target, new Map([
+        ["oversized", Buffer.alloc(budget.bytes + 1)]
+      ])),
+      new RegExp(`${target} package exceeds the ${budget.bytes}-byte budget`)
+    );
+  }
 });
 
 test("release ZIP must exactly match the extension source tree", t => {

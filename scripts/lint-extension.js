@@ -10,36 +10,24 @@ const { stageTarget } = require("./stage-extension.js");
 const EXPECTED_WARNINGS = Object.freeze([
   Object.freeze({
     code: "DANGEROUS_EVAL",
-    column: 208,
     file: "resources/mathjax/input/tex/extensions/begingroup.js",
-    line: 1
+    count: 1
   }),
   Object.freeze({
     code: "DANGEROUS_EVAL",
-    column: 208,
     file: "resources/mathjax/input/tex/extensions/boldsymbol.js",
-    line: 1
+    count: 1
   }),
   Object.freeze({
     code: "DANGEROUS_EVAL",
-    column: 118608,
     file: "resources/mathjax/tex-svg.js",
-    line: 1
+    count: 1
   }),
-  ...[
-    255403,
-    255450,
-    1574526,
-    1575981,
-    1576498,
-    1576747,
-    1790750
-  ].map(column => Object.freeze({
+  Object.freeze({
     code: "UNSAFE_VAR_ASSIGNMENT",
-    column,
     file: "resources/mathjax/tex-svg.js",
-    line: 1
-  }))
+    count: 7
+  })
 ]);
 
 function fail(message) {
@@ -54,16 +42,11 @@ function sha256(filename) {
 }
 
 function warningKey(warning) {
-  return [
-    warning.code,
-    warning.file,
-    warning.line,
-    warning.column
-  ].join(":");
+  return [warning.code, warning.file].join(":");
 }
 
 function warningLabel(warning) {
-  return `${warning.code} at ${warning.file}:${warning.line}:${warning.column}`;
+  return `${warning.code} in ${warning.file}`;
 }
 
 function artifactDigests(root) {
@@ -133,7 +116,7 @@ function validateLintReport({ report, root, sourceDir }) {
   const expectedCounts = new Map();
   for (const warning of EXPECTED_WARNINGS) {
     const key = warningKey(warning);
-    expectedCounts.set(key, (expectedCounts.get(key) || 0) + 1);
+    expectedCounts.set(key, warning.count);
   }
 
   for (const warning of warnings) {

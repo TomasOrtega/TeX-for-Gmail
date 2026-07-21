@@ -24,9 +24,23 @@ function loadComposeContent(source, options = {}) {
   const editorEvents = [];
   const ports = [];
   const requests = [];
+  const selectorQueries = [];
   const timers = [];
+  const animationFrames = [];
   let connectCount = 0;
+  let renderCacheHighWater = 0;
   let sourceTokenCounter = 0;
+
+  class RuntimeMap extends Map {
+    set(key, value) {
+      const result = super.set(key, value);
+      if (options.trackRenderCache &&
+          typeof value === "string" &&
+          value.startsWith("data:image/png;base64,"))
+        renderCacheHighWater = Math.max(renderCacheHighWater, this.size);
+      return result;
+    }
+  }
 
   function dataKey(name) {
     return name.slice(5).replace(/-([a-z])/g, (_match, letter) =>
@@ -241,6 +255,7 @@ function loadComposeContent(source, options = {}) {
     }
 
     querySelectorAll(selector) {
+      selectorQueries.push({ root: this, selector });
       return descendants(this).filter(node =>
         node.nodeType === 1 && matchesSelector(node, selector)
       );
@@ -256,6 +271,13 @@ function loadComposeContent(source, options = {}) {
       delete this.attributes[name];
       if (name.startsWith("data-"))
         delete this.dataset[dataKey(name)];
+    }
+
+    replaceChildren(...nodes) {
+      for (const child of this.childNodes)
+        child.parentNode = undefined;
+      this.childNodes = [];
+      this.append(...nodes);
     }
   }
 
@@ -404,7 +426,10 @@ function loadComposeContent(source, options = {}) {
     set src(value) {
       this.source = value;
       queueMicrotask(() => {
-        const event = options.imageError ? "error" : "load";
+        const imageError = typeof options.imageError === "function"
+          ? options.imageError(this)
+          : options.imageError;
+        const event = imageError ? "error" : "load";
         for (const listener of this.listeners.get(event) || [])
           listener();
       });
@@ -560,6 +585,8 @@ function loadComposeContent(source, options = {}) {
         onMessage,
         async sendMessage(message) {
           bootstrapMessages.push(message);
+          if (options.bootstrapRequest)
+            return options.bootstrapRequest(message);
           if (options.bootstrapError)
             throw options.bootstrapError;
           return options.bootstrapResult || { ok: true };
@@ -568,8 +595,8 @@ function loadComposeContent(source, options = {}) {
     },
     clearTimeout() {},
     Communicator: class {
-      constructor(wrapper) {
-        this.port = wrapper.target;
+      constructor(port) {
+        this.port = port;
       }
 
       request(_command, request) {
@@ -613,13 +640,13 @@ function loadComposeContent(source, options = {}) {
       FILTER_REJECT: 2,
       SHOW_TEXT: 4
     },
-    PortWrapper: class {
-      constructor(target) {
-        this.target = target;
-      }
-    },
+    Map: RuntimeMap,
     Promise,
     queueMicrotask,
+    requestAnimationFrame: options.noAnimationFrame ? undefined : callback => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    },
     setTimeout(callback, delay) {
       timers.push({ callback, delay });
       return timers.length;
@@ -654,6 +681,10 @@ function loadComposeContent(source, options = {}) {
         ? undefined : scheduleToolbarSync,
       formattingAnchor: typeof formattingAnchor === "undefined"
         ? undefined : formattingAnchor,
+      delimitedMathInEditor: typeof delimitedMathInEditor === "undefined"
+        ? undefined : delimitedMathInEditor,
+      expressionBoundary: typeof expressionBoundary === "undefined"
+        ? undefined : expressionBoundary,
       markRenderedImage: typeof markRenderedImage === "undefined"
         ? undefined : markRenderedImage,
       rememberedRenderedSourceCount:
@@ -662,12 +693,14 @@ function loadComposeContent(source, options = {}) {
       sourceForRenderedImage: typeof sourceForRenderedImage === "undefined"
         ? undefined : sourceForRenderedImage
     })`, context),
+    animationFrames,
     bold,
     bootstrapMessages,
     commands,
     connectCount: () => connectCount,
     additionalEditors,
     createCompose,
+    createEditor,
     createElement(tagName) {
       return new FakeElement(tagName);
     },
@@ -676,6 +709,10 @@ function loadComposeContent(source, options = {}) {
     documentListeners,
     editor,
     editorEvents,
+    flushAnimationFrames() {
+      for (const callback of animationFrames.splice(0))
+        callback();
+    },
     makeElementRange(node, startOffset, endOffset = startOffset) {
       const range = new FakeRange();
       range.setStart(node, startOffset);
@@ -690,12 +727,14 @@ function loadComposeContent(source, options = {}) {
       return range;
     },
     ports,
+    renderCacheHighWater: () => renderCacheHighWater,
     requests,
+    selectorQueries,
     selection,
     toolbar,
     timers,
-    triggerMutation() {
-      mutationCallback?.([]);
+    triggerMutation(records = []) {
+      mutationCallback?.(records);
     }
   };
 }
@@ -864,6 +903,137 @@ test("Gmail toolbar restores Gmail line markup after a render failure",
     assert.deepEqual(line.childNodes, [strong, lineBreak, emphasis]);
     assert.equal(strong.textContent, "^2");
     assert.equal(emphasis.textContent, " + y");
+  });
+
+test("Gmail toolbar replaces multiline math without empty Gmail lines",
+  async () => {
+    const runtime = loadComposeContent("");
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.ok(firstLine.querySelector(
+      'img[data-tex-for-gmail-rendered="1"]'
+    ));
+    assert.equal(firstLine.textContent, "");
+    assert.equal(secondLine.parentNode, undefined);
+    assert.equal(afterLine.textContent, "after");
+  });
+
+test("Gmail toolbar restores exact multiline Gmail lines after failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    const firstText = runtime.document.createTextNode("$$x");
+    const secondText = runtime.document.createTextNode("+y$$");
+    firstLine.append(firstText);
+    secondLine.append(secondText);
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.deepEqual(
+      runtime.editor.childNodes,
+      [firstLine, secondLine, afterLine]
+    );
+    assert.deepEqual(firstLine.childNodes, [firstText]);
+    assert.deepEqual(secondLine.childNodes, [secondText]);
+    assert.equal(firstText.data, "$$x");
+    assert.equal(secondText.data, "+y$$");
+    assert.equal(afterLine.textContent, "after");
+  });
+
+test("Gmail toolbar keeps changed multiline math without empty lines",
+  async () => {
+    let resolveRender;
+    const runtime = loadComposeContent("", {
+      request() {
+        return new Promise(resolve => {
+          resolveRender = resolve;
+        });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    const pending = runtime.editor.querySelector(
+      "[data-tex-for-gmail-pending]"
+    );
+    pending.textContent = "$z$";
+    resolveRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: true, rendered: 0 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.equal(firstLine.textContent, "$z$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+    assert.equal(secondLine.parentNode, undefined);
+  });
+
+test("Gmail toolbar does not restore removed multiline pending math",
+  async () => {
+    let rejectRender;
+    const runtime = loadComposeContent("", {
+      request() {
+        return new Promise((_resolve, reject) => {
+          rejectRender = reject;
+        });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    runtime.editor.querySelector("[data-tex-for-gmail-pending]").remove();
+    rejectRender(new Error("Renderer failed."));
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: false, rendered: 0 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.equal(firstLine.textContent, "");
+    assert.equal(secondLine.parentNode, undefined);
   });
 
 test("Gmail toolbar renders multiline AMS math across Gmail line markup",
@@ -1143,12 +1313,28 @@ test("Gmail toolbar declines ambiguous or non-toolbar formatting controls", () =
     undefined
   );
 
+  const detachedToolbar = shared.createElement("div");
+  detachedToolbar.setAttribute("role", "toolbar");
+  const detachedBold = shared.createElement("div");
+  detachedBold.setAttribute("command", "+bold");
+  detachedToolbar.append(detachedBold);
+  assert.equal(
+    shared.api.formattingAnchor(shared.editor, [detachedBold]),
+    undefined
+  );
+
   const unrelated = loadComposeContent("$x$", {
     boldOutsideToolbar: true,
     withToolbar: false
   });
   assert.equal(unrelated.dialog.querySelector(buttonSelector), undefined);
   assert.equal(unrelated.api.formattingAnchor(unrelated.editor), undefined);
+
+  const duplicate = loadComposeContent("$x$");
+  const duplicateBold = duplicate.createElement("div");
+  duplicateBold.setAttribute("command", "+bold");
+  duplicate.toolbar.append(duplicateBold);
+  assert.equal(duplicate.api.formattingAnchor(duplicate.editor), undefined);
 });
 
 test("Gmail toolbar ignores rich-text fields that are not compose bodies", () => {
@@ -1190,11 +1376,317 @@ test("Gmail toolbar gives display math its own layout", async () => {
   );
 });
 
+test("Gmail toolbar scopes active renders to each compose editor", async () => {
+  let resolveSlowRender;
+  const runtime = loadComposeContent("$slow$", {
+    additionalSources: ["$fast$"],
+    request(request) {
+      if (request.source === "slow") {
+        return new Promise(resolve => {
+          resolveSlowRender = resolve;
+        });
+      }
+      return Promise.resolve({
+        dataUrl: "data:image/png;base64,iVBORw0KGgo="
+      });
+    }
+  });
+  const fastEditor = runtime.additionalEditors[0];
+
+  const slowRendering = runtime.api.renderAllMathInEditor(runtime.editor);
+  const fastRendering = runtime.api.renderAllMathInEditor(fastEditor);
+  assert.deepEqual(
+    { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+    { ok: false, error: "A LaTeX render is already in progress." }
+  );
+
+  const fastResult = { ...await fastRendering };
+  const disconnectsWhileSlow = runtime.ports[0].disconnectCalls;
+
+  resolveSlowRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+  const slowResult = { ...await slowRendering };
+
+  assert.deepEqual(fastResult, { ok: true, rendered: 1 });
+  assert.deepEqual(slowResult, { ok: true, rendered: 1 });
+  assert.deepEqual(
+    runtime.requests.map(request => request.source),
+    ["slow", "fast"]
+  );
+  assert.equal(runtime.connectCount(), 1);
+  assert.equal(disconnectsWhileSlow, 0);
+  assert.equal(runtime.ports[0].disconnectCalls, 1);
+});
+
+test("Gmail toolbar restores formulas when renderer initialization fails",
+  async () => {
+    const runtime = loadComposeContent("$x$", {
+      bootstrapResult: { error: "Renderer unavailable.", ok: false }
+    });
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(runtime.connectCount(), 0);
+    assert.equal(runtime.requests.length, 0);
+    assert.equal(runtime.editor.textContent, "$x$");
+  });
+
+test("Gmail toolbar skips a changed formula before its renderer request",
+  async () => {
+    let resolveBootstrap;
+    const runtime = loadComposeContent("$x$", {
+      bootstrapRequest() {
+        return new Promise(resolve => {
+          resolveBootstrap = resolve;
+        });
+      }
+    });
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    runtime.editor.querySelector("[data-tex-for-gmail-pending]")
+      .textContent = "$y$";
+    resolveBootstrap({ ok: true });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: true, rendered: 0 }
+    );
+    assert.equal(runtime.requests.length, 0);
+    assert.equal(runtime.editor.textContent, "$y$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+  });
+
+test("Gmail toolbar stops a detached compose batch before another request",
+  async () => {
+    let attempts = 0;
+    let resolveFirstRender;
+    const runtime = loadComposeContent("$first$ $second$ $third$", {
+      request() {
+        attempts++;
+        if (attempts > 1) {
+          return Promise.resolve({
+            dataUrl: "data:image/png;base64,iVBORw0KGgo="
+          });
+        }
+        return new Promise(resolve => {
+          resolveFirstRender = resolve;
+        });
+      }
+    });
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    runtime.dialog.remove();
+    resolveFirstRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: false, rendered: 0 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["first"]
+    );
+    assert.equal(runtime.editor.textContent, "$first$ $second$ $third$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+    assert.equal(runtime.editorEvents.length, 0);
+  });
+
+test("Gmail toolbar does not retry a restarting renderer after detachment",
+  async () => {
+    let attempts = 0;
+    let runtime;
+    runtime = loadComposeContent("$x$", {
+      request(_request, port) {
+        attempts++;
+        runtime.dialog.remove();
+        for (const listener of port.onDisconnect.listeners)
+          listener();
+        return Promise.reject({ err: "Communication target disconnected." });
+      }
+    });
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.equal(attempts, 1);
+    assert.equal(runtime.connectCount(), 1);
+    assert.equal(runtime.editor.textContent, "$x$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+  });
+
+test("Gmail toolbar does not notify a detached editor after a partial batch",
+  async () => {
+    let attempts = 0;
+    let resolveSecondRender;
+    const runtime = loadComposeContent("$first$ $second$ $third$", {
+      request() {
+        attempts++;
+        if (attempts === 2) {
+          return new Promise(resolve => {
+            resolveSecondRender = resolve;
+          });
+        }
+        return Promise.resolve({
+          dataUrl: "data:image/png;base64,iVBORw0KGgo="
+        });
+      }
+    });
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["first", "second"]
+    );
+    runtime.dialog.remove();
+    resolveSecondRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: false, rendered: 1 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => request.source),
+      ["first", "second"]
+    );
+    assert.equal(runtime.editorEvents.length, 0);
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+  });
+
+test("Gmail toolbar caches successful duplicate renders within one batch",
+  async () => {
+    const runtime = loadComposeContent(
+      String.raw`$x$ then \(x\) and $$x$$`,
+      { trackRenderCache: true }
+    );
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 3 }
+    );
+    assert.deepEqual(
+      runtime.requests.map(request => ({
+        display: request.display,
+        source: request.source
+      })),
+      [
+        { display: false, source: "x" },
+        { display: true, source: "x" }
+      ]
+    );
+    const images = runtime.editor.querySelectorAll(
+      'img[data-tex-for-gmail-rendered="1"]'
+    );
+    assert.equal(images.length, 3);
+    assert.notEqual(images[0], images[1]);
+    assert.notEqual(
+      images[0].dataset.texForGmailSourceToken,
+      images[1].dataset.texForGmailSourceToken
+    );
+    assert.equal(runtime.renderCacheHighWater(), 1);
+  });
+
+test("Gmail toolbar does not cache failed results or later batches",
+  async () => {
+    let attempts = 0;
+    const runtime = loadComposeContent("$x$ and $x$", {
+      request() {
+        attempts++;
+        if (attempts === 1)
+          return Promise.reject(new Error("Renderer failed."));
+        return Promise.resolve({
+          dataUrl: "data:image/png;base64,iVBORw0KGgo="
+        });
+      }
+    });
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 1 }
+    );
+    assert.equal(attempts, 2);
+
+    runtime.editor.textContent = "$x$";
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    assert.equal(attempts, 3);
+
+    let imageLoads = 0;
+    const imageFailure = loadComposeContent("$y$ and $y$", {
+      imageError() {
+        imageLoads++;
+        return imageLoads === 1;
+      }
+    });
+    assert.deepEqual(
+      { ...await imageFailure.api.renderAllMathInEditor(imageFailure.editor) },
+      { ok: false, rendered: 1 }
+    );
+    assert.equal(imageFailure.requests.length, 2);
+  });
+
+test("Gmail toolbar preserves a changed duplicate awaiting a shared result",
+  async () => {
+    let attempts = 0;
+    let resolveRender;
+    const runtime = loadComposeContent("$x$ and $x$", {
+      request() {
+        attempts++;
+        if (attempts > 1) {
+          return Promise.resolve({
+            dataUrl: "data:image/png;base64,iVBORw0KGgo="
+          });
+        }
+        return new Promise(resolve => {
+          resolveRender = resolve;
+        });
+      }
+    });
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    const pending = runtime.editor.querySelectorAll(
+      "[data-tex-for-gmail-pending]"
+    );
+    assert.equal(pending.length, 2);
+    pending[1].textContent = "$y$";
+    resolveRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: true, rendered: 1 }
+    );
+    assert.equal(runtime.requests.length, 1);
+    assert.equal(runtime.editor.textContent, " and $y$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+  });
+
 test("Gmail toolbar leaves excess formulas for the next batch", async () => {
   const source = Array.from({ length: 51 }, (_value, index) =>
     `$x_${index}$`
   ).join(" ");
-  const runtime = loadComposeContent(source);
+  const runtime = loadComposeContent(source, { trackRenderCache: true });
 
   assert.deepEqual(
     { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
@@ -1203,6 +1695,7 @@ test("Gmail toolbar leaves excess formulas for the next batch", async () => {
   assert.equal(runtime.requests.length, 50);
   assert.equal(runtime.requests[0].source, "x_0");
   assert.equal(runtime.requests.at(-1).source, "x_49");
+  assert.equal(runtime.renderCacheHighWater(), 0);
   assert.match(
     runtime.document.querySelector("#tex-for-gmail-status").textContent,
     /Batch limit reached/
@@ -1212,6 +1705,60 @@ test("Gmail toolbar leaves excess formulas for the next batch", async () => {
     { ok: true, rendered: 1 }
   );
   assert.equal(runtime.requests.at(-1).source, "x_50");
+});
+
+test("math discovery stops after the batch lookahead", () => {
+  const runtime = loadComposeContent("");
+  const firstStream = runtime.createElement("p");
+  firstStream.textContent = Array.from({ length: 51 }, (_value, index) =>
+    `$x_${index}$`
+  ).join(" ");
+  const unvisitedStream = runtime.createElement("p");
+  Object.defineProperty(unvisitedStream, "childNodes", {
+    get() {
+      throw new Error("scanned beyond the batch lookahead");
+    }
+  });
+  runtime.editor.replaceChildren(firstStream, unvisitedStream);
+
+  const result = runtime.api.delimitedMathInEditor(runtime.editor);
+
+  assert.equal(result.expressions.length, 50);
+  assert.equal(result.truncated, true);
+  assert.equal(result.expressions.at(-1).text, "$x_49$");
+});
+
+test("ordered expression boundaries advance through segments once", () => {
+  const runtime = loadComposeContent("");
+  const segments = Array.from({ length: 100 }, (_value, index) => ({
+    end: index * 3 + 3,
+    node: { index },
+    start: index * 3
+  }));
+  let segmentReads = 0;
+  const stream = {
+    segments: new Proxy(segments, {
+      get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property))
+          segmentReads++;
+        return Reflect.get(target, property, receiver);
+      }
+    })
+  };
+  const cursor = { index: 0 };
+
+  for (let index = 0; index < 100; index++) {
+    assert.equal(
+      runtime.api.expressionBoundary(stream, index * 3, false, cursor).node,
+      segments[index].node
+    );
+    assert.equal(
+      runtime.api.expressionBoundary(stream, index * 3 + 3, true, cursor).node,
+      segments[index].node
+    );
+  }
+
+  assert.ok(segmentReads <= 300, `${segmentReads} segment reads`);
 });
 
 test("Gmail toolbar recovers one restarting renderer and rejects bad images", async () => {
@@ -1498,19 +2045,216 @@ test("Gmail toolbar activation tracks dynamically added compose windows", async 
   assert.deepEqual(runtime.requests.map(request => request.source), ["x"]);
 
   const dynamic = runtime.createCompose("$y$");
-  runtime.api.scheduleToolbarSync();
-  runtime.api.scheduleToolbarSync();
-  await Promise.resolve();
+  runtime.api.scheduleToolbarSync(dynamic.dialog);
+  runtime.api.scheduleToolbarSync(dynamic.dialog);
+  runtime.flushAnimationFrames();
   assert.ok(dynamic.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
 
   const observed = runtime.createCompose("$z$");
-  runtime.triggerMutation();
-  await Promise.resolve();
+  runtime.triggerMutation([{
+    addedNodes: [observed.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
   assert.ok(observed.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
 
-  runtime.documentListeners.get("focusin")();
-  await Promise.resolve();
+  runtime.documentListeners.get("focusin")({ target: observed.editor });
+  runtime.flushAnimationFrames();
+
+  const outsideCompose = runtime.createElement("input");
+  runtime.document.documentElement.append(outsideCompose);
+  runtime.documentListeners.get("focusin")({ target: outsideCompose });
+  assert.equal(runtime.animationFrames.length, 0);
 
   const noObserver = loadComposeContent("$x$", { noMutationObserver: true });
   assert.ok(noObserver.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
+  const focusActivated = noObserver.createCompose("$focus$");
+  noObserver.documentListeners.get("focusin")({ target: focusActivated.editor });
+  noObserver.flushAnimationFrames();
+  assert.ok(focusActivated.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+
+  const fallback = loadComposeContent("$x$", { noAnimationFrame: true });
+  const fallbackDynamic = fallback.createCompose("$fallback$");
+  fallback.api.scheduleToolbarSync(fallbackDynamic.dialog);
+  await Promise.resolve();
+  assert.ok(fallbackDynamic.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+});
+
+test("Gmail toolbar ignores extension-owned editor and status mutations",
+  async () => {
+    const runtime = loadComposeContent("$x$");
+    const pending = runtime.createElement("span");
+    pending.dataset.texForGmailPending = "1";
+    const image = runtime.createElement("img");
+    image.dataset.texForGmailRendered = "1";
+    const status = runtime.createElement("div");
+    status.id = "tex-for-gmail-status";
+    const installedButton = runtime.toolbar.querySelector(
+      "[data-tex-for-gmail-toolbar-button]"
+    );
+    runtime.editor.append(pending);
+    runtime.document.documentElement.append(status);
+    runtime.selectorQueries.length = 0;
+
+    const records = [
+      {
+        addedNodes: [pending],
+        removedNodes: [],
+        target: runtime.editor,
+        type: "childList"
+      },
+      {
+        addedNodes: [image],
+        removedNodes: [pending],
+        target: runtime.editor,
+        type: "childList"
+      },
+      {
+        addedNodes: [status],
+        removedNodes: [],
+        target: runtime.document.documentElement,
+        type: "childList"
+      },
+      {
+        addedNodes: [],
+        removedNodes: [],
+        target: status,
+        type: "childList"
+      },
+      {
+        addedNodes: [installedButton],
+        removedNodes: [],
+        target: runtime.toolbar,
+        type: "childList"
+      }
+    ];
+    for (let turn = 0; turn < 100; turn++) {
+      runtime.triggerMutation(records);
+      await Promise.resolve();
+    }
+
+    assert.equal(runtime.animationFrames.length, 0);
+    assert.equal(runtime.selectorQueries.length, 0);
+  });
+
+test("Gmail toolbar coalesces and scopes compose reconciliation", async () => {
+  const runtime = loadComposeContent("$initial$");
+  const unobserved = runtime.createCompose("$unobserved$");
+  const first = runtime.createCompose("$first$");
+  const second = runtime.createCompose("$second$");
+  runtime.selectorQueries.length = 0;
+
+  runtime.triggerMutation([{
+    addedNodes: [first.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+  runtime.triggerMutation([{
+    addedNodes: [second.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+
+  assert.equal(runtime.animationFrames.length, 1);
+  runtime.flushAnimationFrames();
+  const globalQueries = runtime.selectorQueries.filter(query =>
+    query.root === runtime.document.documentElement
+  );
+
+  assert.ok(first.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+  assert.ok(second.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+  assert.equal(unobserved.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ), undefined);
+  assert.deepEqual(globalQueries, []);
+});
+
+test("Gmail toolbar rebinds a retained button after its editor is replaced",
+  async () => {
+    const runtime = loadComposeContent("$old$");
+    const selector = "[data-tex-for-gmail-toolbar-button]";
+    const staleButton = runtime.toolbar.querySelector(selector);
+    const replacement = runtime.createEditor("$new$");
+    runtime.editor.replaceWith(replacement);
+
+    runtime.triggerMutation([{
+      addedNodes: [replacement],
+      removedNodes: [runtime.editor],
+      target: runtime.dialog,
+      type: "childList"
+    }]);
+    runtime.flushAnimationFrames();
+    const button = runtime.toolbar.querySelector(selector);
+
+    assert.notEqual(button, staleButton);
+    assert.equal(staleButton.isConnected, false);
+    assert.equal(replacement.listeners.get("beforeinput")?.length, 1);
+    assert.equal(replacement.listeners.get("dblclick")?.length, 1);
+    assert.equal(button.listeners.get("mousedown")?.length, 1);
+    assert.equal(button.listeners.get("click")?.length, 1);
+
+    runtime.api.syncGmailToolbars();
+    assert.equal(runtime.toolbar.querySelector(selector), button);
+    assert.equal(replacement.listeners.get("beforeinput")?.length, 1);
+    assert.equal(replacement.listeners.get("dblclick")?.length, 1);
+    assert.equal(button.listeners.get("click")?.length, 1);
+
+    button.dispatchEvent({ type: "click" });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(runtime.requests.map(request => request.source), ["new"]);
+  });
+
+test("Gmail toolbar repairs cloned and removed buttons", async () => {
+  const runtime = loadComposeContent("$x$");
+  const selector = "[data-tex-for-gmail-toolbar-button]";
+  const dynamic = runtime.createCompose("$y$");
+  const clone = runtime.createElement("button");
+  clone.dataset.texForGmailToolbarButton = "1";
+  clone.textContent = "∑";
+  dynamic.toolbar.insertBefore(clone, dynamic.bold.nextSibling);
+
+  runtime.triggerMutation([{
+    addedNodes: [clone],
+    removedNodes: [],
+    target: dynamic.toolbar,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
+  const button = dynamic.toolbar.querySelector(selector);
+
+  assert.notEqual(button, clone);
+  assert.equal(clone.isConnected, false);
+  assert.equal(dynamic.toolbar.querySelectorAll(selector).length, 1);
+  assert.equal(dynamic.editor.listeners.get("beforeinput")?.length, 1);
+  assert.equal(dynamic.editor.listeners.get("dblclick")?.length, 1);
+  assert.equal(button.listeners.get("mousedown")?.length, 1);
+  assert.equal(button.listeners.get("click")?.length, 1);
+
+  button.remove();
+  runtime.triggerMutation([{
+    addedNodes: [],
+    removedNodes: [button],
+    target: dynamic.toolbar,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
+  const replacement = dynamic.toolbar.querySelector(selector);
+  assert.notEqual(replacement, button);
+  assert.equal(replacement.listeners.get("click")?.length, 1);
+
+  replacement.dispatchEvent({ type: "click" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(runtime.requests.map(request => request.source), ["y"]);
 });

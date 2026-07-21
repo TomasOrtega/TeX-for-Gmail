@@ -80,13 +80,13 @@ function requireDimensions(width, height) {
   return { height, width };
 }
 
-function requirePngFile(file) {
-  if (!(file instanceof ArrayBuffer))
-    throw new Error("PNG output must be an array buffer.");
-  if (file.byteLength < 8 || file.byteLength > MAX_PNG_BYTES)
+async function requirePngBlob(file) {
+  if (!(file instanceof Blob))
+    throw new Error("PNG output must be a blob.");
+  if (file.size < 8 || file.size > MAX_PNG_BYTES)
     throw new Error("PNG output exceeds the size limit or is empty.");
 
-  const bytes = new Uint8Array(file);
+  const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
   if (bytes[0] !== 0x89 ||
       bytes[1] !== 0x50 ||
       bytes[2] !== 0x4e ||
@@ -265,7 +265,7 @@ function canvasPng(canvas) {
         reject(new Error("The rendered image could not be encoded."));
         return;
       }
-      blob.arrayBuffer().then(resolve, reject);
+      resolve(blob);
     }, "image/png");
   });
 }
@@ -298,7 +298,7 @@ async function rasterizeSvg(source, scale, alpha) {
     contentWidth,
     contentHeight
   );
-  return requirePngFile(await canvasPng(canvas));
+  return requirePngBlob(await canvasPng(canvas));
 }
 
 function withRenderTimeout(render) {
@@ -349,20 +349,35 @@ function enqueueRender(render) {
   const completed = execution.finally(() => {
     scheduledRenders--;
   });
-  renderQueue = completed.catch(() => undefined);
+  renderQueue = completed.then(
+    () => undefined,
+    () => undefined
+  );
   if (!waiting)
     return completed;
   return Promise.race([completed, waiting])
     .finally(() => clearTimeout(queueTimer));
 }
 
-function base64Encode(file) {
-  const bytes = file instanceof Uint8Array ? file : new Uint8Array(file);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize)
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  return btoa(binary);
+function blobDataUrl(file, type) {
+  let blob;
+  if (file instanceof Blob)
+    blob = file.type === type ? file : file.slice(0, file.size, type);
+  else if (file instanceof ArrayBuffer || ArrayBuffer.isView(file))
+    blob = new Blob([file], { type });
+  else
+    throw new Error("Data URL input must be a blob or buffer.");
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result), {
+      once: true
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error || new Error("The PNG output could not be encoded."));
+    }, { once: true });
+    reader.readAsDataURL(blob);
+  });
 }
 
 function beginRender() {
@@ -479,14 +494,16 @@ async function compile2pngDataURL(request) {
   const { source, display, scale, alpha } = validateRenderRequest(request);
   beginRender();
   const rendering = enqueueRender(() =>
-    renderSvg(source, display).then(svg => rasterizeSvg(svg, scale, alpha))
+    renderSvg(source, display)
+      .then(svg => rasterizeSvg(svg, scale, alpha))
+      .then(png => blobDataUrl(png, "image/png"))
   );
   rendering.then(finishRender, finishRender);
-  const png = await rendering;
+  const dataUrl = await rendering;
   return {
     code: Communicator.SUCCESS,
     payload: {
-      dataUrl: `data:image/png;base64,${base64Encode(png)}`
+      dataUrl
     }
   };
 }
@@ -509,7 +526,7 @@ chrome.runtime.onConnect.addListener(port => {
     return;
   }
 
-  const comm = new Communicator(new PortWrapper(port));
+  const comm = new Communicator(port);
   ports.set(port, comm);
   setupMessageHandler(comm);
   port.onDisconnect.addListener(() => ports.delete(port));

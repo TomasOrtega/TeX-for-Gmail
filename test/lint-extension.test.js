@@ -62,7 +62,14 @@ function report(overrides = {}) {
   return {
     errors: [],
     notices: [],
-    warnings: EXPECTED_WARNINGS.map(warning => ({ ...warning })),
+    warnings: EXPECTED_WARNINGS.flatMap(expectation => {
+      const { count, ...warning } = expectation;
+      return Array.from({ length: count }, (_, index) => ({
+        ...warning,
+        column: index + 1,
+        line: index + 1
+      }));
+    }),
     ...overrides
   };
 }
@@ -76,17 +83,17 @@ test("the project depends on the linter directly, without web-ext", () => {
     fs.readFileSync(path.join(root, "package-lock.json"), "utf8")
   );
 
-  assert.equal(packageJson.devDependencies["addons-linter"], "10.8.0");
+  assert.equal(packageJson.devDependencies["addons-linter"], "10.9.0");
   assert.equal(packageJson.devDependencies["web-ext"], undefined);
   assert.equal(packageJson.scripts["start:firefox"], undefined);
   assert.equal(
     packageLock.packages["node_modules/addons-linter"].version,
-    "10.8.0"
+    "10.9.0"
   );
   assert.equal(packageLock.packages["node_modules/web-ext"], undefined);
 });
 
-test("the exact integrity-locked MathJax warnings pass", t => {
+test("integrity-locked MathJax warning counts ignore minified offsets", t => {
   const context = fixture(t);
 
   assert.deepEqual(
@@ -107,7 +114,7 @@ test("new, duplicate, and missing warnings fail closed", t => {
   assert.throws(
     () => validateLintReport({
       ...context,
-      report: report({ warnings: [...EXPECTED_WARNINGS, unexpected] })
+      report: report({ warnings: [...report().warnings, unexpected] })
     }),
     /Unexpected addons-linter warning.*src\/background\.js/
   );
@@ -115,7 +122,7 @@ test("new, duplicate, and missing warnings fail closed", t => {
     () => validateLintReport({
       ...context,
       report: report({
-        warnings: [...EXPECTED_WARNINGS, EXPECTED_WARNINGS[0]]
+        warnings: [...report().warnings, report().warnings[0]]
       })
     }),
     /Unexpected addons-linter warning/
@@ -123,7 +130,7 @@ test("new, duplicate, and missing warnings fail closed", t => {
   assert.throws(
     () => validateLintReport({
       ...context,
-      report: report({ warnings: EXPECTED_WARNINGS.slice(1) })
+      report: report({ warnings: report().warnings.slice(1) })
     }),
     /Expected addons-linter warning is missing/
   );

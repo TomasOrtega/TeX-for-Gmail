@@ -17,6 +17,27 @@ const {
 const { stageTarget } = require("../scripts/stage-extension.js");
 const { verifyTargetZip } = require("../scripts/verify-zip.js");
 
+const FIXTURE_SOURCE_FILES = Object.freeze([
+  "LICENSE",
+  "THIRD_PARTY_NOTICES.md",
+  "icons/icon.svg",
+  "icons/icon-16.png",
+  "icons/icon-32.png",
+  "icons/icon-48.png",
+  "icons/icon-128.png",
+  "src/background.html",
+  "src/background.js",
+  "src/chrome-offscreen.html",
+  "src/chrome-service-worker.js",
+  "src/controller.js",
+  "src/shared.js"
+]);
+const FIXTURE_TRACKED_FILES = Object.freeze([
+  ...FIXTURE_SOURCE_FILES.map(filename => `chrome-extension/${filename}`),
+  "targets/chrome/manifest.json",
+  "targets/firefox/manifest.json"
+]);
+
 function writeFile(root, relative, contents = relative) {
   const filename = path.join(root, ...relative.split("/"));
   fs.mkdirSync(path.dirname(filename), { recursive: true });
@@ -28,22 +49,7 @@ function createFixture(t) {
   t.after(() => fs.rmSync(root, { force: true, recursive: true }));
   writeFile(root, "package.json", JSON.stringify({ version: "1.2.3" }));
 
-  const sourceFiles = [
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.md",
-    "icons/icon.svg",
-    "icons/icon-16.png",
-    "icons/icon-32.png",
-    "icons/icon-48.png",
-    "icons/icon-128.png",
-    "src/background.html",
-    "src/background.js",
-    "src/chrome-offscreen.html",
-    "src/chrome-service-worker.js",
-    "src/controller.js",
-    "src/shared.js"
-  ];
-  for (const filename of sourceFiles)
+  for (const filename of FIXTURE_SOURCE_FILES)
     writeFile(root, `chrome-extension/${filename}`);
   writeFile(
     root,
@@ -67,13 +73,38 @@ function sha256(filename) {
     .digest("hex");
 }
 
+test("target builds require tracked-file discovery", t => {
+  const root = createFixture(t);
+  writeFile(root, "chrome-extension/untracked.js", "const secret = true;\n");
+
+  assert.throws(
+    () => buildTarget({ root, target: "chrome", quiet: true }),
+    /Cannot determine tracked files with Git/
+  );
+  assert.equal(fs.existsSync(path.join(root, "build", "chrome")), false);
+  assert.equal(
+    fs.existsSync(path.join(root, "dist", "tex-for-gmail-chrome-1.2.3.zip")),
+    false
+  );
+});
+
 test("staging replaces manifests, cleans stale files, and prunes each target", t => {
   const root = createFixture(t);
   for (const target of ["firefox", "chrome"])
     writeFile(root, `build/${target}/stale.txt`, "stale");
 
-  const firefox = stageTarget({ root, target: "firefox", quiet: true });
-  const chrome = stageTarget({ root, target: "chrome", quiet: true });
+  const firefox = stageTarget({
+    root,
+    target: "firefox",
+    trackedFiles: FIXTURE_TRACKED_FILES,
+    quiet: true
+  });
+  const chrome = stageTarget({
+    root,
+    target: "chrome",
+    trackedFiles: FIXTURE_TRACKED_FILES,
+    quiet: true
+  });
 
   for (const config of [firefox, chrome]) {
     assert.equal(fs.existsSync(path.join(config.stageRoot, "stale.txt")), false);
@@ -157,7 +188,12 @@ test("target builds produce distinct deterministic ZIPs", t => {
   const first = {};
 
   for (const target of ["firefox", "chrome"]) {
-    const result = buildTarget({ root, target, quiet: true });
+    const result = buildTarget({
+      root,
+      target,
+      trackedFiles: FIXTURE_TRACKED_FILES,
+      quiet: true
+    });
     first[target] = sha256(result.archivePath);
     const entries = new AdmZip(result.archivePath).getEntries();
     assert.equal(
@@ -179,7 +215,7 @@ test("target builds produce distinct deterministic ZIPs", t => {
     );
     for (const entry of entries) {
       assert.equal(entry.header.fileAttr, 0o644, `${target}: ${entry.entryName}`);
-      assert.equal(entry.header.method, 0, `${target}: ${entry.entryName}`);
+      assert.equal(entry.header.method, 8, `${target}: ${entry.entryName}`);
       assert.equal(
         entry.header.timeval,
         ZIP_DOS_TIMESTAMP,
@@ -187,13 +223,23 @@ test("target builds produce distinct deterministic ZIPs", t => {
       );
     }
     assert.doesNotThrow(() =>
-      verifyTargetZip({ root, target, quiet: true })
+      verifyTargetZip({
+        root,
+        target,
+        trackedFiles: FIXTURE_TRACKED_FILES,
+        quiet: true
+      })
     );
   }
 
   assert.notEqual(first.firefox, first.chrome);
   for (const target of ["firefox", "chrome"]) {
-    const result = buildTarget({ root, target, quiet: true });
+    const result = buildTarget({
+      root,
+      target,
+      trackedFiles: FIXTURE_TRACKED_FILES,
+      quiet: true
+    });
     assert.equal(sha256(result.archivePath), first[target]);
     assert.equal(
       result.archivePath,

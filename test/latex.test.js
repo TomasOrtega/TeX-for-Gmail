@@ -89,6 +89,56 @@ test("findDelimitedMath locates only complete, unescaped math expressions", () =
   assert.deepEqual(latex.findDelimitedMath("$$  $$"), []);
 });
 
+test("findDelimitedMath stops after its optional result limit", () => {
+  const input = "$x$ ".repeat(100000);
+  const originalSlice = String.prototype.slice;
+  const OriginalUint8Array = globalThis.Uint8Array;
+  let delimiterIndexAllocations = 0;
+  let expressionSlices = 0;
+  let expressions;
+
+  globalThis.Uint8Array = class extends OriginalUint8Array {
+    constructor(...args) {
+      super(...args);
+      delimiterIndexAllocations++;
+    }
+  };
+  String.prototype.slice = function (start, end) {
+    if (this === input && end - start === 3)
+      expressionSlices++;
+    return Reflect.apply(originalSlice, this, [start, end]);
+  };
+  try {
+    expressions = latex.findDelimitedMath(input, 51);
+  } finally {
+    String.prototype.slice = originalSlice;
+    globalThis.Uint8Array = OriginalUint8Array;
+  }
+
+  assert.equal(expressions.length, 51);
+  assert.equal(expressionSlices, 51);
+  assert.equal(delimiterIndexAllocations, 0);
+  assert.deepEqual(expressions.at(-1), {
+    end: 203,
+    start: 200,
+    text: "$x$"
+  });
+  assert.equal(latex.findDelimitedMath("$x$ and $y$").length, 2);
+  assert.deepEqual(latex.findDelimitedMath("$x$", 0), []);
+  assert.throws(
+    () => latex.findDelimitedMath("$x$", -1),
+    /non-negative integer/
+  );
+});
+
+test("bounded results match the default parser prefix", () => {
+  const input = String.raw`Skip \$5; \(x\\)y\), $$z$$, \[w\], $q$, then \(r\).`;
+  const all = latex.findDelimitedMath(input);
+
+  assert.deepEqual(latex.findDelimitedMath(input, 3), all.slice(0, 3));
+  assert.ok(all.length > 3);
+});
+
 test("findDelimitedMath does not treat common dollar amounts as math", () => {
   assert.deepEqual(
     latex.findDelimitedMath("The items cost $10 and $20 today."),
@@ -129,4 +179,25 @@ test("findDelimitedMath scans repeated unmatched openers linearly", () => {
     startsWithCalls <= input.length * 10,
     `${startsWithCalls} delimiter checks for ${input.length} characters`
   );
+});
+
+test("bounded delimiter scans do not rescan unmatched opener suffixes", () => {
+  const input = String.raw`\(`.repeat(20000);
+  const originalIndexOf = String.prototype.indexOf;
+  let closingSearches = 0;
+  let expressions;
+
+  String.prototype.indexOf = function (search, ...args) {
+    if (this === input && search === String.raw`\)`)
+      closingSearches++;
+    return Reflect.apply(originalIndexOf, this, [search, ...args]);
+  };
+  try {
+    expressions = latex.findDelimitedMath(input, 51);
+  } finally {
+    String.prototype.indexOf = originalIndexOf;
+  }
+
+  assert.deepEqual(expressions, []);
+  assert.equal(closingSearches, 1);
 });

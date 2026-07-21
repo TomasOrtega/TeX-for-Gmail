@@ -9,11 +9,20 @@ const MAX_PNG_BASE64_LENGTH = Math.ceil(MAX_PNG_BYTES / 3) * 4;
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 const RENDER_PORT_NAME = "tex-for-gmail-render";
 const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
+const RENDER_ITEM_CANCELLED = Symbol("render item cancelled");
+const RENDER_BATCH_CANCELLED = Symbol("render batch cancelled");
 const GMAIL_EDITOR_SELECTOR =
   '[g_editable="true"][contenteditable="true"][role="textbox"]';
 const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
+const GMAIL_TOOLBAR_SELECTOR = '[role="toolbar"]';
 const RENDERED_IMAGE_SELECTOR = 'img[data-tex-for-gmail-rendered="1"]';
 const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
+const TOOLBAR_STRUCTURE_SELECTOR =
+  `${GMAIL_EDITOR_SELECTOR}, ${GMAIL_BOLD_SELECTOR}, ` +
+  `${GMAIL_TOOLBAR_SELECTOR}, ${TOOLBAR_BUTTON_SELECTOR}`;
+const EXTENSION_MUTATION_SELECTOR =
+  "#tex-for-gmail-status, [data-tex-for-gmail-pending], " +
+  RENDERED_IMAGE_SELECTOR;
 const MATH_EXCLUDED_SELECTOR =
   '[contenteditable="false"], blockquote, .gmail_quote, ' +
   '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
@@ -81,10 +90,14 @@ const MATH_STREAM_BARRIER_TAGS = new Set([
 const MAX_BATCH_EXPRESSIONS = 50;
 const MAX_REMEMBERED_RENDERED_SOURCES = 500;
 let rendererConnection;
+let rendererConnectionPromise;
 let statusTimer;
-let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
+const editorsRendering = new WeakSet();
+const editorToolbarAssociations = new WeakMap();
+const pendingToolbarScopes = new Set();
+const toolbarButtonEditors = new WeakMap();
 const renderedSources = new WeakMap();
 const renderedSourcesByToken = new Map();
 
@@ -92,25 +105,41 @@ async function getCommunicator() {
   if (rendererConnection)
     return rendererConnection;
 
-  const readiness = await extensionApi.runtime.sendMessage({
-    type: "tex-for-gmail:ensure-renderer"
-  });
-  if (readiness?.ok !== true)
-    throw new Error(readiness?.error || "The renderer could not be initialized.");
+  if (!rendererConnectionPromise) {
+    rendererConnectionPromise = (async () => {
+      const readiness = await extensionApi.runtime.sendMessage({
+        type: "tex-for-gmail:ensure-renderer"
+      });
+      if (readiness?.ok !== true) {
+        throw new Error(
+          readiness?.error || "The renderer could not be initialized."
+        );
+      }
 
-  const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
-  const connection = {
-    communicator: new Communicator(new PortWrapper(port)),
-    disconnected: false,
-    port
-  };
-  rendererConnection = connection;
-  port.onDisconnect.addListener(() => {
-    connection.disconnected = true;
-    if (rendererConnection === connection)
-      rendererConnection = undefined;
-  });
-  return connection;
+      const port = extensionApi.runtime.connect({ name: RENDER_PORT_NAME });
+      const connection = {
+        communicator: new Communicator(port),
+        disconnected: false,
+        port,
+        sessions: 0
+      };
+      rendererConnection = connection;
+      port.onDisconnect.addListener(() => {
+        connection.disconnected = true;
+        if (rendererConnection === connection)
+          rendererConnection = undefined;
+      });
+      return connection;
+    })();
+  }
+
+  const pending = rendererConnectionPromise;
+  try {
+    return await pending;
+  } finally {
+    if (rendererConnectionPromise === pending)
+      rendererConnectionPromise = undefined;
+  }
 }
 
 function closeCommunicator(connection) {
@@ -127,6 +156,29 @@ function rendererRestarted(error, connection) {
     error?.err === RENDERER_RESTARTING_ERROR;
 }
 
+async function acquireRendererSession(session) {
+  if (session.connection)
+    return session.connection;
+
+  const connection = await getCommunicator();
+  connection.sessions++;
+  session.connection = connection;
+  return connection;
+}
+
+function releaseRendererSession(session, retire = false, forceClose = false) {
+  const connection = session.connection;
+  if (!connection)
+    return;
+
+  session.connection = undefined;
+  connection.sessions--;
+  if (retire && rendererConnection === connection)
+    rendererConnection = undefined;
+  if (forceClose || connection.sessions === 0)
+    closeCommunicator(connection);
+}
+
 async function requestPngDataUrl(connection, source, display, scale, alpha) {
   const response = await connection.communicator.request(
     "compile2pngDataURL",
@@ -140,18 +192,28 @@ async function requestPngDataUrl(connection, source, display, scale, alpha) {
   return requirePngDataUrl(response.dataUrl);
 }
 
-async function compileWithRendererSession(session, source, display, scale, alpha) {
+async function compileWithRendererSession(
+  session,
+  source,
+  display,
+  scale,
+  alpha,
+  requestCancellation
+) {
   let mayRetry = true;
   while (true) {
-    const connection = session.connection || await getCommunicator();
-    session.connection = connection;
+    let cancellation = requestCancellation();
+    if (cancellation)
+      return cancellation;
+    const connection = await acquireRendererSession(session);
+    cancellation = requestCancellation();
+    if (cancellation)
+      return cancellation;
     try {
       return await requestPngDataUrl(connection, source, display, scale, alpha);
     } catch (error) {
       const retry = mayRetry && rendererRestarted(error, connection);
-      if (session.connection === connection)
-        session.connection = undefined;
-      closeCommunicator(connection);
+      releaseRendererSession(session, true, retry);
       if (!retry)
         throw error;
       mayRetry = false;
@@ -160,9 +222,7 @@ async function compileWithRendererSession(session, source, display, scale, alpha
 }
 
 function closeRendererSession(session) {
-  if (session.connection)
-    closeCommunicator(session.connection);
-  session.connection = undefined;
+  releaseRendererSession(session);
 }
 
 function requirePngDataUrl(dataUrl) {
@@ -329,14 +389,14 @@ function sourceForRenderedImage(image) {
   return source;
 }
 
-function logicalMathStreams(editor) {
-  const streams = [];
+function* logicalMathStreams(editor) {
   let stream = { segments: [], text: "" };
 
-  function finishStream() {
-    if (stream.text)
-      streams.push(stream);
+  function* finishStream() {
+    const finished = stream;
     stream = { segments: [], text: "" };
+    if (finished.text)
+      yield finished;
   }
 
   function appendText(node) {
@@ -356,7 +416,7 @@ function logicalMathStreams(editor) {
       stream.text += "\n";
   }
 
-  function visit(node) {
+  function* visit(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       appendText(node);
       return;
@@ -365,7 +425,7 @@ function logicalMathStreams(editor) {
       return;
 
     if (node.matches?.(MATH_EXCLUDED_SELECTOR)) {
-      finishStream();
+      yield* finishStream();
       return;
     }
     if (node.tagName === "BR") {
@@ -373,14 +433,14 @@ function logicalMathStreams(editor) {
       return;
     }
     if (node !== editor && MATH_STREAM_BARRIER_TAGS.has(node.tagName)) {
-      finishStream();
+      yield* finishStream();
       return;
     }
     if (node !== editor && MATH_STREAM_BOUNDARY_TAGS.has(node.tagName)) {
-      finishStream();
+      yield* finishStream();
       for (const child of node.childNodes)
-        visit(child);
-      finishStream();
+        yield* visit(child);
+      yield* finishStream();
       return;
     }
 
@@ -389,22 +449,25 @@ function logicalMathStreams(editor) {
     if (breaksLine)
       appendStructuralLineBreak();
     for (const child of node.childNodes)
-      visit(child);
+      yield* visit(child);
     if (breaksLine)
       appendStructuralLineBreak();
   }
 
-  visit(editor);
-  finishStream();
-  return streams;
+  yield* visit(editor);
+  yield* finishStream();
 }
 
-function expressionBoundary(stream, index, end) {
+function expressionBoundary(stream, index, end, cursor = { index: 0 }) {
   const character = end ? index - 1 : index;
-  const segment = stream.segments.find(candidate =>
-    candidate.start <= character && character < candidate.end
-  );
-  if (!segment)
+  let segment = stream.segments[cursor.index];
+  while (segment && segment.end <= character) {
+    cursor.index++;
+    segment = stream.segments[cursor.index];
+  }
+  if (!segment ||
+      segment.start > character ||
+      character >= segment.end)
     return undefined;
   return {
     node: segment.node,
@@ -415,12 +478,24 @@ function expressionBoundary(stream, index, end) {
 function delimitedMathInEditor(editor) {
   const expressions = [];
   for (const stream of logicalMathStreams(editor)) {
-    const matches = TeXForGmail.findDelimitedMath(stream.text);
+    const resultLimit = MAX_BATCH_EXPRESSIONS - expressions.length + 1;
+    const matches = TeXForGmail.findDelimitedMath(stream.text, resultLimit);
+    const boundaryCursor = { index: 0 };
     for (const match of matches) {
       if (expressions.length === MAX_BATCH_EXPRESSIONS)
         return { expressions, truncated: true };
-      const start = expressionBoundary(stream, match.start, false);
-      const end = expressionBoundary(stream, match.end, true);
+      const start = expressionBoundary(
+        stream,
+        match.start,
+        false,
+        boundaryCursor
+      );
+      const end = expressionBoundary(
+        stream,
+        match.end,
+        true,
+        boundaryCursor
+      );
       if (!start || !end)
         continue;
       expressions.push({
@@ -435,6 +510,129 @@ function delimitedMathInEditor(editor) {
   return { expressions, truncated: false };
 }
 
+function gmailLineContainer(node, editor) {
+  let current = node.nodeType === Node.ELEMENT_NODE
+    ? node
+    : node.parentElement;
+  while (current && current !== editor) {
+    if (current.tagName === "DIV")
+      return current;
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+function commonAncestor(first, second) {
+  const firstAncestors = new Set();
+  for (let node = first; node; node = node.parentNode)
+    firstAncestors.add(node);
+  for (let node = second; node; node = node.parentNode) {
+    if (firstAncestors.has(node))
+      return node;
+  }
+}
+
+function childWithin(node, ancestor) {
+  let child = node;
+  while (child?.parentNode && child.parentNode !== ancestor)
+    child = child.parentNode;
+  return child?.parentNode === ancestor ? child : undefined;
+}
+
+function snapshotSubtree(node) {
+  return {
+    children: [...node.childNodes].map(snapshotSubtree),
+    data: node.nodeType === Node.TEXT_NODE ? node.data : undefined,
+    node
+  };
+}
+
+function restoreSubtree(snapshot) {
+  if (snapshot.node.nodeType === Node.TEXT_NODE) {
+    snapshot.node.data = snapshot.data;
+    return;
+  }
+  snapshot.node.replaceChildren(
+    ...snapshot.children.map(child => child.node)
+  );
+  for (const child of snapshot.children)
+    restoreSubtree(child);
+}
+
+function lineHasContent(node) {
+  if (node.nodeType === Node.TEXT_NODE)
+    return node.data.length > 0;
+  if (node.nodeType !== Node.ELEMENT_NODE)
+    return false;
+  if (node.tagName === "BR" ||
+      MATH_STREAM_BARRIER_TAGS.has(node.tagName) ||
+      node.matches?.(MATH_EXCLUDED_SELECTOR))
+    return true;
+  return [...node.childNodes].some(lineHasContent);
+}
+
+function multilineRangeTransaction(expression, editor) {
+  const startLine = gmailLineContainer(expression.startNode, editor);
+  const endLine = gmailLineContainer(expression.endNode, editor);
+  if (startLine === endLine)
+    return undefined;
+
+  const parent = commonAncestor(expression.startNode, expression.endNode);
+  if (!parent || (parent !== editor && !editor.contains(parent)))
+    return undefined;
+  const startRoot = childWithin(expression.startNode, parent);
+  const endRoot = childWithin(expression.endNode, parent);
+  if (!startRoot || !endRoot || startRoot === endRoot)
+    return undefined;
+
+  const siblings = [...parent.childNodes];
+  const startIndex = siblings.indexOf(startRoot);
+  const endIndex = siblings.indexOf(endRoot);
+  if (startIndex < 0 || endIndex <= startIndex)
+    return undefined;
+
+  const roots = siblings.slice(startIndex, endIndex + 1);
+  const snapshots = roots.map(snapshotSubtree);
+  const before = document.createTextNode("");
+  const after = document.createTextNode("");
+  parent.insertBefore(before, startRoot);
+  parent.insertBefore(after, endRoot.nextSibling);
+
+  function finish() {
+    before.remove();
+    after.remove();
+  }
+
+  return {
+    commit(replacement) {
+      if (replacement && startLine && startLine !== parent)
+        startLine.append(replacement);
+      for (const root of roots.slice(1, -1))
+        root.remove();
+      if (endRoot === endLine && !lineHasContent(endLine))
+        endLine.remove();
+      finish();
+    },
+    restore() {
+      const intact = before.parentNode === parent &&
+        after.parentNode === parent;
+      if (intact) {
+        for (let node = before.nextSibling; node && node !== after;) {
+          const next = node.nextSibling;
+          node.remove();
+          node = next;
+        }
+        for (const snapshot of snapshots)
+          restoreSubtree(snapshot);
+        for (const root of roots)
+          parent.insertBefore(root, after);
+      }
+      finish();
+      return intact;
+    }
+  };
+}
+
 function pendingMathExpression(expression, editor) {
   if (!expression.startNode.isConnected ||
       !expression.endNode.isConnected ||
@@ -445,16 +643,49 @@ function pendingMathExpression(expression, editor) {
   const pending = document.createElement("span");
   pending.dataset.texForGmailPending = "1";
   pending.textContent = expression.text;
+  const transaction = multilineRangeTransaction(expression, editor);
   const range = document.createRange();
   range.setStart(expression.startNode, expression.startOffset);
   range.setEnd(expression.endNode, expression.endOffset);
   const original = range.extractContents();
   range.insertNode(pending);
-  return { original, pending };
+  return { original, pending, transaction };
+}
+
+function pendingExpressionCancellation(item, editor) {
+  if (!editor.isConnected)
+    return RENDER_BATCH_CANCELLED;
+  if (!item.pending.isConnected ||
+      !editor.contains(item.pending) ||
+      item.pending.textContent !== item.expression.text)
+    return RENDER_ITEM_CANCELLED;
+}
+
+function requireCurrentPendingExpression(item, editor) {
+  const cancellation = pendingExpressionCancellation(item, editor);
+  if (cancellation)
+    throw cancellation;
+}
+
+function settlePendingExpression(item, editor) {
+  const { expression, original, pending, transaction } = item;
+  const remainsInEditor = editor.contains(pending);
+  if (remainsInEditor && pending.textContent === expression.text) {
+    if (!transaction?.restore())
+      pending.replaceWith(original);
+    return;
+  }
+
+  pending.removeAttribute("data-tex-for-gmail-pending");
+  transaction?.commit(remainsInEditor ? pending : undefined);
+}
+
+function renderCacheKey(source, display, scale, alpha) {
+  return JSON.stringify([source, display, scale, alpha]);
 }
 
 async function renderAllMathInEditor(editor) {
-  if (renderInProgress)
+  if (editorsRendering.has(editor))
     return { ok: false, error: "A LaTeX render is already in progress." };
 
   const { expressions, truncated } = delimitedMathInEditor(editor);
@@ -463,61 +694,120 @@ async function renderAllMathInEditor(editor) {
     return { ok: true, rendered: 0 };
   }
 
-  renderInProgress = true;
+  const preparedExpressions = expressions.map(expression => {
+    const normalized = TeXForGmail.normalizeInput(expression.text);
+    return {
+      cacheKey: renderCacheKey(
+        normalized.source,
+        normalized.display,
+        RENDER_SCALE,
+        1
+      ),
+      expression,
+      normalized
+    };
+  });
+
+  editorsRendering.add(editor);
+  const renderCache = new Map();
   const session = {};
+  let stopped = false;
   let failures = 0;
   let rendered = 0;
   try {
     showStatus("Rendering math…");
     const pendingExpressions = [];
-    for (let index = expressions.length - 1; index >= 0; index--) {
-      const expression = expressions[index];
-      const pendingExpression = pendingMathExpression(expression, editor);
+    for (let index = preparedExpressions.length - 1; index >= 0; index--) {
+      const prepared = preparedExpressions[index];
+      const pendingExpression = pendingMathExpression(
+        prepared.expression,
+        editor
+      );
       if (pendingExpression)
-        pendingExpressions.unshift({ expression, ...pendingExpression });
+        pendingExpressions.unshift({ ...prepared, ...pendingExpression });
     }
 
-    for (const { expression, original, pending } of pendingExpressions) {
+    const remainingCacheUses = new Map();
+    for (const item of pendingExpressions) {
+      remainingCacheUses.set(
+        item.cacheKey,
+        (remainingCacheUses.get(item.cacheKey) || 0) + 1
+      );
+    }
+
+    for (let index = 0; index < pendingExpressions.length; index++) {
+      const item = pendingExpressions[index];
+      const { pending, transaction } = item;
+
+      const hasCachedDataUrl = renderCache.has(item.cacheKey);
+      let dataUrl = hasCachedDataUrl
+        ? renderCache.get(item.cacheKey)
+        : undefined;
+      const futureCacheUses = remainingCacheUses.get(item.cacheKey) - 1;
+      if (futureCacheUses === 0) {
+        remainingCacheUses.delete(item.cacheKey);
+        renderCache.delete(item.cacheKey);
+      } else {
+        remainingCacheUses.set(item.cacheKey, futureCacheUses);
+      }
+
       try {
-        const normalized = TeXForGmail.normalizeInput(expression.text);
-        const dataUrl = await compileWithRendererSession(
-          session,
-          normalized.source,
-          normalized.display,
-          RENDER_SCALE,
-          1
-        );
+        requireCurrentPendingExpression(item, editor);
+        const { normalized } = item;
+        if (!hasCachedDataUrl) {
+          dataUrl = await compileWithRendererSession(
+            session,
+            normalized.source,
+            normalized.display,
+            RENDER_SCALE,
+            1,
+            () => pendingExpressionCancellation(item, editor)
+          );
+          if (dataUrl === RENDER_ITEM_CANCELLED ||
+              dataUrl === RENDER_BATCH_CANCELLED)
+            throw dataUrl;
+          if (futureCacheUses > 0)
+            renderCache.set(item.cacheKey, dataUrl);
+        }
+
+        requireCurrentPendingExpression(item, editor);
+
         const image = await loadImage(
           dataUrl,
           normalized.original,
           normalized.display
         );
-        if (!pending.isConnected ||
-            !editor.contains(pending) ||
-            pending.textContent !== expression.text) {
-          pending.removeAttribute("data-tex-for-gmail-pending");
-          continue;
-        }
+        requireCurrentPendingExpression(item, editor);
         pending.replaceWith(image);
+        transaction?.commit(image);
         rendered++;
       } catch (error) {
-        failures++;
-        if (pending.isConnected &&
-            editor.contains(pending) &&
-            pending.textContent === expression.text)
-          pending.replaceWith(original);
-        else
-          pending.removeAttribute("data-tex-for-gmail-pending");
+        const cancelled = error === RENDER_ITEM_CANCELLED ||
+          error === RENDER_BATCH_CANCELLED;
+        if (!cancelled) {
+          failures++;
+          renderCache.delete(item.cacheKey);
+        }
+        if (error === RENDER_BATCH_CANCELLED || !editor.isConnected)
+          stopped = true;
+        settlePendingExpression(item, editor);
+        if (stopped) {
+          for (const remaining of pendingExpressions.slice(index + 1))
+            settlePendingExpression(remaining, editor);
+          break;
+        }
       }
     }
-    if (rendered)
+    if (rendered && editor.isConnected)
       notifyEditorInput(editor, "insertReplacementText");
-    if (failures || truncated) {
+    if (failures || truncated || stopped) {
       const details = [];
       if (failures)
         details.push(`${failures} left as text`);
       if (truncated)
         details.push("Batch limit reached; click ∑ again for the rest");
+      if (stopped)
+        details.push("Compose window closed; rendering stopped");
       showStatus(
         `${rendered} expression${rendered === 1 ? "" : "s"} rendered. ` +
         `${details.join(". ")}.`,
@@ -532,7 +822,7 @@ async function renderAllMathInEditor(editor) {
     return { ok: true, rendered };
   } finally {
     closeRendererSession(session);
-    renderInProgress = false;
+    editorsRendering.delete(editor);
   }
 }
 
@@ -667,33 +957,72 @@ function configureGmailEditor(editor) {
   editor.addEventListener("dblclick", handleEditorDoubleClick);
 }
 
-function formattingAnchor(editor) {
-  let match;
-  for (const anchor of document.querySelectorAll(GMAIL_BOLD_SELECTOR)) {
-    const toolbar = anchor.closest?.('[role="toolbar"]');
-    if (!toolbar)
-      continue;
+function matchingElements(scope, selector) {
+  const matches = [];
+  if (scope?.nodeType === Node.ELEMENT_NODE && scope.matches?.(selector))
+    matches.push(scope);
+  matches.push(...scope.querySelectorAll(selector));
+  return matches;
+}
 
-    for (let scope = editor.parentElement; scope; scope = scope.parentElement) {
-      if (!scope.contains?.(toolbar))
-        continue;
-      const editors = scope.querySelectorAll?.(GMAIL_EDITOR_SELECTOR);
-      if (!editors || editors.length !== 1 || editors[0] !== editor)
-        break;
-      if (match)
-        return undefined;
-      match = anchor;
-      break;
-    }
+function formattingScope(editor, anchor) {
+  const toolbar = anchor.closest?.(GMAIL_TOOLBAR_SELECTOR);
+  if (!toolbar)
+    return undefined;
+
+  for (let scope = editor.parentElement; scope; scope = scope.parentElement) {
+    if (!scope.contains?.(toolbar))
+      continue;
+    const editors = matchingElements(scope, GMAIL_EDITOR_SELECTOR);
+    return editors.length === 1 && editors[0] === editor
+      ? scope
+      : undefined;
   }
+  return undefined;
+}
+
+function formattingAnchor(editor, anchors = matchingElements(
+  document,
+  GMAIL_BOLD_SELECTOR
+)) {
+  let match;
+  let scope;
+  for (const anchor of anchors) {
+    const candidateScope = formattingScope(editor, anchor);
+    if (!candidateScope)
+      continue;
+    if (match) {
+      editorToolbarAssociations.delete(editor);
+      return undefined;
+    }
+    match = anchor;
+    scope = candidateScope;
+  }
+  if (match)
+    editorToolbarAssociations.set(editor, { anchor: match, scope });
+  else
+    editorToolbarAssociations.delete(editor);
   return match;
 }
 
-function installGmailToolbarButton(editor) {
-  const anchor = formattingAnchor(editor);
+function installGmailToolbarButton(editor, anchors) {
+  configureGmailEditor(editor);
+  const anchor = formattingAnchor(editor, anchors);
   const parent = anchor?.parentElement;
-  if (!parent || parent.querySelector(TOOLBAR_BUTTON_SELECTOR))
+  if (!parent)
     return;
+
+  const buttons = [...parent.querySelectorAll(TOOLBAR_BUTTON_SELECTOR)];
+  const configuredButton = buttons.find(button =>
+    toolbarButtonEditors.get(button) === editor
+  );
+  if (configuredButton) {
+    for (const button of buttons) {
+      if (button !== configuredButton)
+        button.remove();
+    }
+    return;
+  }
 
   const button = document.createElement("button");
   button.type = "button";
@@ -706,23 +1035,156 @@ function installGmailToolbarButton(editor) {
   button.addEventListener("click", () => {
     void renderAllMathInEditor(editor);
   });
-  parent.insertBefore(button, anchor.nextSibling);
-  configureGmailEditor(editor);
+  toolbarButtonEditors.set(button, editor);
+
+  if (buttons.length) {
+    buttons[0].replaceWith(button);
+    for (const staleButton of buttons.slice(1))
+      staleButton.remove();
+  } else {
+    parent.insertBefore(button, anchor.nextSibling);
+  }
 }
 
-function syncGmailToolbars() {
-  for (const editor of document.querySelectorAll(GMAIL_EDITOR_SELECTOR))
-    installGmailToolbarButton(editor);
+function syncGmailToolbars(scope = document) {
+  const editors = matchingElements(scope, GMAIL_EDITOR_SELECTOR);
+  const anchors = matchingElements(scope, GMAIL_BOLD_SELECTOR);
+  for (const editor of editors)
+    installGmailToolbarButton(editor, anchors);
 }
 
-function scheduleToolbarSync() {
+function toolbarScopeContains(scope, candidate) {
+  return scope === document || scope === candidate || scope.contains?.(candidate);
+}
+
+function queueToolbarScope(scope) {
+  for (const queued of pendingToolbarScopes) {
+    if (toolbarScopeContains(queued, scope))
+      return;
+    if (toolbarScopeContains(scope, queued))
+      pendingToolbarScopes.delete(queued);
+  }
+  pendingToolbarScopes.add(scope);
+}
+
+function flushToolbarSync() {
+  const scopes = [...pendingToolbarScopes];
+  pendingToolbarScopes.clear();
+  toolbarRefreshQueued = false;
+  for (const scope of scopes) {
+    if (scope === document || scope.isConnected)
+      syncGmailToolbars(scope);
+  }
+}
+
+function scheduleToolbarSync(scope = document) {
+  queueToolbarScope(scope);
   if (toolbarRefreshQueued)
     return;
   toolbarRefreshQueued = true;
-  queueMicrotask(() => {
-    toolbarRefreshQueued = false;
-    syncGmailToolbars();
-  });
+  if (typeof requestAnimationFrame === "function")
+    requestAnimationFrame(flushToolbarSync);
+  else
+    queueMicrotask(flushToolbarSync);
+}
+
+function elementForNode(node) {
+  return node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+}
+
+function configuredEditorContaining(node) {
+  const element = elementForNode(node);
+  const editor = element?.matches?.(GMAIL_EDITOR_SELECTOR)
+    ? element
+    : element?.closest?.(GMAIL_EDITOR_SELECTOR);
+  return configuredEditors.has(editor) ? editor : undefined;
+}
+
+function extensionOwnedNode(node) {
+  const element = elementForNode(node);
+  return Boolean(element?.closest?.(EXTENSION_MUTATION_SELECTOR));
+}
+
+function installedToolbarButton(node) {
+  const button = elementForNode(node)?.closest?.(TOOLBAR_BUTTON_SELECTOR);
+  return Boolean(button && toolbarButtonEditors.has(button));
+}
+
+function containsToolbarStructure(node) {
+  const element = elementForNode(node);
+  return Boolean(element && (
+    element.matches?.(TOOLBAR_STRUCTURE_SELECTOR) ||
+    element.querySelector?.(TOOLBAR_STRUCTURE_SELECTOR)
+  ));
+}
+
+function containsSelector(scope, selector) {
+  return scope.matches?.(selector) || scope.querySelector?.(selector);
+}
+
+function toolbarScopeForNode(node) {
+  const element = elementForNode(node);
+  const editor = configuredEditorContaining(element);
+  const association = editor && editorToolbarAssociations.get(editor);
+  if (association?.scope?.isConnected && association.scope.contains(editor))
+    return association.scope;
+
+  const button = element?.closest?.(TOOLBAR_BUTTON_SELECTOR);
+  const buttonEditor = button && toolbarButtonEditors.get(button);
+  const buttonAssociation = buttonEditor &&
+    editorToolbarAssociations.get(buttonEditor);
+  if (buttonAssociation?.scope?.isConnected &&
+      buttonAssociation.scope.contains(button))
+    return buttonAssociation.scope;
+
+  for (let scope = element; scope && scope !== document.body;
+    scope = scope.parentElement) {
+    const hasEditor = containsSelector(scope, GMAIL_EDITOR_SELECTOR);
+    const hasToolbar = containsSelector(scope, GMAIL_TOOLBAR_SELECTOR) ||
+      containsSelector(scope, GMAIL_BOLD_SELECTOR);
+    if (hasEditor && hasToolbar)
+      return scope;
+    if (scope.matches?.('[role="dialog"]'))
+      return scope;
+  }
+  return undefined;
+}
+
+function handleToolbarMutations(records) {
+  for (const record of records) {
+    if (configuredEditorContaining(record.target) ||
+        extensionOwnedNode(record.target))
+      continue;
+    const changedNodes = [
+      ...(record.addedNodes || []),
+      ...(record.removedNodes || [])
+    ];
+    if (!changedNodes.length || changedNodes.every(extensionOwnedNode))
+      continue;
+    if (!(record.removedNodes || []).length &&
+        (record.addedNodes || []).length &&
+        [...record.addedNodes].every(installedToolbarButton))
+      continue;
+    const relevantNodes = changedNodes.filter(containsToolbarStructure);
+    if (!relevantNodes.length)
+      continue;
+
+    let scheduled = false;
+    for (const node of relevantNodes) {
+      if (!node.isConnected)
+        continue;
+      const scope = toolbarScopeForNode(node);
+      if (scope) {
+        scheduleToolbarSync(scope);
+        scheduled = true;
+      }
+    }
+    if (!scheduled) {
+      const scope = toolbarScopeForNode(record.target);
+      if (scope)
+        scheduleToolbarSync(scope);
+    }
+  }
 }
 
 function startGmailToolbarIntegration() {
@@ -732,13 +1194,15 @@ function startGmailToolbarIntegration() {
   if (typeof MutationObserver !== "function")
     return;
 
-  new MutationObserver(scheduleToolbarSync).observe(document.body, {
+  new MutationObserver(handleToolbarMutations).observe(document.body, {
     childList: true,
     subtree: true
   });
 }
 
-document.addEventListener("focusin", () => {
-  scheduleToolbarSync();
+document.addEventListener("focusin", event => {
+  const scope = toolbarScopeForNode(event?.target);
+  if (scope)
+    scheduleToolbarSync(scope);
 });
 startGmailToolbarIntegration();

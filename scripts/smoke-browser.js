@@ -2,11 +2,9 @@
 "use strict";
 
 const fs = require("node:fs");
-const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { pathToFileURL } = require("node:url");
 const { stageTarget } = require("./stage-extension.js");
 
 const FIXTURE = fs.readFileSync(
@@ -14,14 +12,45 @@ const FIXTURE = fs.readFileSync(
   "utf8"
 ).trim();
 const INLINE_BREAK_FIXTURE = String.raw`\mathcal{E} + 1 = 1`;
+const INLINE_PREFIX_FIXTURE = String.raw`\mathcal{E}`;
+const MACRO_BASELINE_FIXTURE = String.raw`\frac{1}{2}`;
+const MACRO_ISOLATED_FIXTURE = String.raw`\frac {1}{2}`;
+const MACRO_MUTATION_FIXTURE =
+  String.raw`\renewcommand{\frac}[2]{X}\frac{1}{2}`;
+const STYLED_UNICODE_FIXTURES = Object.freeze([
+  { label: "unicode-normal", source: String.raw`\mathrm{é}` },
+  { label: "unicode-bold", source: String.raw`\mathbf{é}` },
+  { label: "unicode-italic", source: String.raw`\mathit{é}` },
+  {
+    label: "unicode-bold-italic",
+    source: String.raw`\boldsymbol{\mathit{é}}`
+  },
+  { label: "unicode-sans-serif", source: String.raw`\mathsf{é}` },
+  { label: "unicode-monospace", source: String.raw`\mathtt{é}` }
+]);
+const SMOKE_RENDER_LABELS = Object.freeze([
+  "feature",
+  "inline",
+  "inline-prefix",
+  "macro-baseline",
+  "macro-mutation",
+  "macro-isolated",
+  "multiline",
+  ...STYLED_UNICODE_FIXTURES.map(({ label }) => label)
+]);
 const DYNAMIC_FILES = Object.freeze([
   "arrows.js",
   "calligraphic.js",
   "double-struck.js",
   "fraktur.js",
   "latin.js",
+  "latin-b.js",
+  "latin-bi.js",
+  "latin-i.js",
   "math.js",
+  "monospace-l.js",
   "monospace.js",
+  "sans-serif-r.js",
   "sans-serif.js",
   "shapes.js",
   "symbols-b-i.js"
@@ -126,14 +155,6 @@ function commonChromeArguments(profile) {
   ];
 }
 
-function chromeArguments({ port, profile }) {
-  return [
-    ...commonChromeArguments(profile),
-    `--remote-debugging-port=${port}`,
-    "about:blank"
-  ];
-}
-
 function extensionChromeArguments({ profile }) {
   return [
     ...commonChromeArguments(profile),
@@ -141,40 +162,6 @@ function extensionChromeArguments({ profile }) {
     "--remote-debugging-pipe",
     "about:blank"
   ];
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address();
-      server.close(error => error ? reject(error) : resolve(port));
-    });
-  });
-}
-
-async function waitForTarget(port, predicate, description) {
-  for (let attempt = 0; attempt < 200; attempt++) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-      const targets = await response.json();
-      const target = targets.find(predicate);
-      if (target)
-        return target;
-    } catch {}
-    await delay(50);
-  }
-  throw new Error(`${description} did not become ready.`);
-}
-
-function waitForPage(port) {
-  return waitForTarget(
-    port,
-    target => target.type === "page",
-    "Chrome DevTools page target"
-  );
 }
 
 async function waitForProtocolTarget(cdp, predicate, description) {
@@ -210,23 +197,10 @@ function protocolConnection({
   let terminalError;
   const pending = new Map();
   const listeners = new Map();
-  const requests = [];
-  const failedRequests = [];
-  const exceptions = [];
-  const cspIssues = [];
   const eventErrors = [];
   const diagnosticsBySession = new Map();
-  const aggregateDiagnostics = {
-    cspIssues,
-    exceptions,
-    failedRequests,
-    requestUrls: new Map(),
-    requests
-  };
 
   function diagnostics(sessionId) {
-    if (sessionId === undefined)
-      return aggregateDiagnostics;
     let result = diagnosticsBySession.get(sessionId);
     if (!result) {
       result = {
@@ -302,7 +276,6 @@ function protocolConnection({
         operation.resolve(message.result);
       return;
     }
-    recordDiagnostics(message, aggregateDiagnostics);
     if (message.sessionId !== undefined)
       recordDiagnostics(message, diagnostics(message.sessionId));
 
@@ -373,39 +346,10 @@ function protocolConnection({
       close();
     },
     command,
-    cspIssues,
     diagnostics,
     eventErrors,
-    exceptions,
-    failedRequests,
-    on,
-    requests
+    on
   };
-}
-
-async function connect(target) {
-  const socket = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", reject, { once: true });
-  });
-  return protocolConnection({
-    close: () => socket.close(),
-    send: message => socket.send(JSON.stringify(message)),
-    subscribe(listener) {
-      socket.addEventListener("message", event => {
-        listener(JSON.parse(event.data));
-      });
-    },
-    subscribeError(fail) {
-      socket.addEventListener("error", () => {
-        fail(new Error("Chrome DevTools WebSocket failed."));
-      });
-      socket.addEventListener("close", () => {
-        fail(new Error("Chrome DevTools WebSocket closed."));
-      });
-    }
-  });
 }
 
 function connectPipe(browser, options = {}) {
@@ -456,100 +400,6 @@ function connectPipe(browser, options = {}) {
       fail = handler;
     }
   });
-}
-
-function createHarness(stageRoot, directory) {
-  fs.copyFileSync(
-    path.join(stageRoot, "src", "background.js"),
-    path.join(directory, "background.js")
-  );
-  fs.cpSync(
-    path.join(stageRoot, "resources"),
-    path.join(directory, "resources"),
-    { recursive: true }
-  );
-  fs.writeFileSync(path.join(directory, "bootstrap.js"), `"use strict";
-globalThis.chrome = {
-  runtime: {
-    id: "tex-for-gmail-smoke",
-    getManifest: () => ({ manifest_version: 3 }),
-    getURL: name => new URL(name, location.href).href,
-    onConnect: { addListener() {} },
-    onMessage: { addListener() {} },
-    sendMessage: () => Promise.resolve()
-  }
-};
-globalThis.Communicator = class {
-  static get SUCCESS() { return "1"; }
-};
-globalThis.PortWrapper = class {};
-`);
-  fs.writeFileSync(path.join(directory, "run.js"), `"use strict";
-globalThis.__done = false;
-(async () => {
-  try {
-    const inline = await compile2pngDataURL({
-      alpha: 1,
-      display: false,
-      scale: 2,
-      source: ${JSON.stringify(INLINE_BREAK_FIXTURE)}
-    });
-    const inlinePrefix = await compile2pngDataURL({
-      alpha: 1,
-      display: false,
-      scale: 2,
-      source: "\\\\mathcal{E}"
-    });
-    const isolationRequest = {
-      alpha: 1,
-      display: false,
-      scale: 2,
-      source: "\\\\frac{1}{2}"
-    };
-    const baseline = await compile2pngDataURL(isolationRequest);
-    await compile2pngDataURL({
-      ...isolationRequest,
-      source: "\\\\renewcommand{\\\\frac}[2]{X}\\\\frac{1}{2}"
-    });
-    const isolated = await compile2pngDataURL(isolationRequest);
-    if (baseline.payload.dataUrl !== isolated.payload.dataUrl)
-      throw new Error("TeX macro definitions leaked between render requests.");
-
-    const response = await compile2pngDataURL({
-      alpha: 1,
-      display: true,
-      scale: 2,
-      source: ${JSON.stringify(FIXTURE)}
-    });
-    globalThis.__result = {
-      dataUrl: response.payload.dataUrl,
-      inlineDataUrl: inline.payload.dataUrl,
-      inlinePrefixDataUrl: inlinePrefix.payload.dataUrl
-    };
-  } catch (error) {
-    globalThis.__result = { error: error.stack || error.message || String(error) };
-  } finally {
-    globalThis.__done = true;
-  }
-})();
-`);
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(stageRoot, "manifest.json"), "utf8")
-  );
-  const csp = manifest.content_security_policy.extension_pages;
-  fs.writeFileSync(path.join(directory, "index.html"), `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="${csp}">
-    <script src="bootstrap.js"></script>
-    <script src="background.js"></script>
-    <script src="run.js"></script>
-  </head>
-  <body></body>
-</html>
-`);
-  return pathToFileURL(path.join(directory, "index.html")).href;
 }
 
 async function evaluateValue(
@@ -646,7 +496,22 @@ function gmailSmokeDocument() {
         <span><button type="button" command="+bold">Bold</button></span>
       </div>
       <div id="editor" g_editable="true" contenteditable="true"
-           role="textbox">\\[${escapeHtml(FIXTURE)}\\]</div>
+           role="textbox">
+        <div data-smoke-render="feature">\\[${escapeHtml(FIXTURE)}\\]</div>
+        <div data-smoke-render="inline">\\(${INLINE_BREAK_FIXTURE}\\)</div>
+        <div data-smoke-render="inline-prefix">\\(${INLINE_PREFIX_FIXTURE}\\)</div>
+        <div data-smoke-render="macro-baseline">\\(${MACRO_BASELINE_FIXTURE}\\)</div>
+        <div data-smoke-render="macro-mutation">\\(${MACRO_MUTATION_FIXTURE}\\)</div>
+        <div data-smoke-render="macro-isolated">\\(${MACRO_ISOLATED_FIXTURE}\\)</div>
+        <div data-smoke-render="multiline" data-smoke-multiline="success">
+          <div data-smoke-line="first">$$x</div>
+          <div data-smoke-line="second">+y$$</div>
+          <div data-smoke-line="after">after</div>
+        </div>
+        ${STYLED_UNICODE_FIXTURES.map(({ label, source }) =>
+          `<div data-smoke-render="${label}">\\(${escapeHtml(source)}\\)</div>`
+        ).join("\n        ")}
+      </div>
     </div>
   </body>
 </html>
@@ -1051,14 +916,30 @@ async function smokeUnpackedExtension({
       `(() => {
         if (location.href !== ${JSON.stringify(GMAIL_PAGE_URL)})
           return false;
-        const images = document.querySelectorAll(
-          'img[data-tex-for-gmail-rendered="1"]'
-        );
-        if (images.length) {
+        const images = {};
+        for (const label of ${JSON.stringify(SMOKE_RENDER_LABELS)}) {
+          images[label] = document.querySelector(
+            '[data-smoke-render="' + label + '"] ' +
+            'img[data-tex-for-gmail-rendered="1"]'
+          )?.src;
+        }
+        if (Object.values(images).every(Boolean)) {
+          const multiline = document.querySelector(
+            '[data-smoke-multiline="success"]'
+          );
           return {
-            dataUrl: images[0].src,
+            images,
+            multiline: [...multiline.children].map(line => ({
+              images: line.querySelectorAll(
+                'img[data-tex-for-gmail-rendered="1"]'
+              ).length,
+              label: line.dataset.smokeLine,
+              text: line.textContent
+            })),
             ok: true,
-            rendered: images.length
+            rendered: document.querySelectorAll(
+              'img[data-tex-for-gmail-rendered="1"]'
+            ).length
           };
         }
         const status = document.querySelector("#tex-for-gmail-status");
@@ -1072,9 +953,92 @@ async function smokeUnpackedExtension({
       })()`,
       "Gmail toolbar render"
     );
-    if (result.ok !== true || result.rendered !== 1)
-      throw new Error(result.error || "Gmail did not render one expression.");
-    const png = requirePng(result.dataUrl);
+    if (result.ok !== true ||
+        result.rendered !== SMOKE_RENDER_LABELS.length) {
+      throw new Error(
+        result.error ||
+        `Gmail did not render ${SMOKE_RENDER_LABELS.length} expressions.`
+      );
+    }
+    if (JSON.stringify(result.multiline) !== JSON.stringify([
+      { images: 1, label: "first", text: "" },
+      { images: 0, label: "after", text: "after" }
+    ])) {
+      throw new Error(
+        "Multiline rendering did not remove its consumed Gmail line: " +
+        JSON.stringify(result.multiline)
+      );
+    }
+    const multilineFailure = await evaluateValue(
+      gmail,
+      `(async () => {
+        const editor = document.querySelector("#editor");
+        const host = document.createElement("div");
+        host.dataset.smokeMultiline = "failure";
+        host.innerHTML = ${JSON.stringify(
+          '<div data-smoke-line="first">$$x</div>' +
+          '<div data-smoke-line="second">+y$$</div>' +
+          '<div data-smoke-line="after">after</div>'
+        )};
+        editor.append(host);
+        const originalLines = [...host.children];
+        const compile = compileWithRendererSession;
+        compileWithRendererSession = async () => {
+          throw new Error("Forced browser smoke render failure.");
+        };
+        try {
+          const outcome = await renderAllMathInEditor(editor);
+          return {
+            lines: [...host.children].map(line => ({
+              label: line.dataset.smokeLine,
+              text: line.textContent
+            })),
+            outcome,
+            pending: host.querySelectorAll(
+              "[data-tex-for-gmail-pending]"
+            ).length,
+            sameNodes: originalLines.every(
+              (line, index) => host.children[index] === line
+            )
+          };
+        } finally {
+          compileWithRendererSession = compile;
+        }
+      })()`,
+      true,
+      extensionContext.id
+    );
+    if (multilineFailure.outcome?.ok !== false ||
+        multilineFailure.outcome?.rendered !== 0 ||
+        multilineFailure.pending !== 0 ||
+        multilineFailure.sameNodes !== true ||
+        JSON.stringify(multilineFailure.lines) !== JSON.stringify([
+          { label: "first", text: "$$x" },
+          { label: "second", text: "+y$$" },
+          { label: "after", text: "after" }
+        ])) {
+      throw new Error(
+        "A failed multiline render did not restore its exact Gmail lines."
+      );
+    }
+    const renderedPngs = Object.fromEntries(
+      Object.entries(result.images).map(([label, dataUrl]) =>
+        [label, requirePng(dataUrl)])
+    );
+    if (renderedPngs.inline.width <=
+        renderedPngs["inline-prefix"].width * 2) {
+      throw new Error(
+        "Inline SVG rendering omitted part of " +
+        `${JSON.stringify(INLINE_BREAK_FIXTURE)} ` +
+        `(${renderedPngs.inline.width}px versus ` +
+        `${renderedPngs["inline-prefix"].width}px prefix).`
+      );
+    }
+    if (result.images["macro-baseline"] !==
+        result.images["macro-isolated"]) {
+      throw new Error("TeX macro definitions leaked between render requests.");
+    }
+    const png = renderedPngs.feature;
 
     requireDynamicFiles(
       offscreen.diagnostics.requests,
@@ -1186,113 +1150,21 @@ async function smokeBrowser({
     target: "chrome",
     quiet: true
   });
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "tex-gmail-chrome-"));
-  const harness = fs.mkdtempSync(path.join(os.tmpdir(), "tex-gmail-smoke-"));
-  const pageUrl = createHarness(stageRoot, harness);
-  const port = await freePort();
-  const browser = spawn(chromePath, chromeArguments({
-    port,
-    profile
-  }), {
-    stdio: ["ignore", "ignore", "pipe"]
-  });
-  const connections = [];
-  let stderr = "";
-  browser.stderr.on("data", chunk => {
-    stderr += chunk;
+  const result = await smokeUnpackedExtension({
+    chromePath,
+    stageRoot
   });
 
-  try {
-    const page = await waitForPage(port);
-    const cdp = await connect(page);
-    connections.push(cdp);
-    await Promise.all([
-      cdp.command("Network.enable"),
-      cdp.command("Page.enable"),
-      cdp.command("Runtime.enable"),
-      cdp.command("Audits.enable")
-    ]);
-
-    await cdp.command("Page.navigate", { url: pageUrl });
-
-    const result = await waitForEvaluation(
-      cdp,
-      "globalThis.__done && globalThis.__result",
-      "Browser renderer"
+  if (!quiet) {
+    console.log(
+      `Unpacked MV3 extension rendered ${SMOKE_RENDER_LABELS.length} ` +
+      `expressions through its Gmail content script, service worker, and ` +
+      `offscreen document; the feature fixture was ` +
+      `${result.width}x${result.height} (${result.bytes} bytes), with no ` +
+      `external requests.`
     );
-    if (result.error)
-      throw new Error(result.error);
-
-    const png = requirePng(result.dataUrl);
-    const inline = requirePng(result.inlineDataUrl);
-    const inlinePrefix = requirePng(result.inlinePrefixDataUrl);
-    if (inline.width <= inlinePrefix.width * 2) {
-      throw new Error(
-        "Inline SVG rendering omitted part of " +
-        `${JSON.stringify(INLINE_BREAK_FIXTURE)} ` +
-        `(${inline.width}px versus ${inlinePrefix.width}px prefix).`
-      );
-    }
-    const localFailure = cdp.failedRequests.find(failure =>
-      failure.url?.startsWith("file:")
-    );
-    if (localFailure) {
-      throw new Error(
-        `Renderer failed to load ${localFailure.url}: ${localFailure.error}`
-      );
-    }
-    const external = cdp.requests.filter(url => /^https?:/i.test(url));
-    if (external.length)
-      throw new Error(`Renderer made an external request: ${external[0]}`);
-    requireDynamicFiles(cdp.requests, "Renderer");
-    if (cdp.exceptions.length)
-      throw new Error(`Renderer raised an exception: ${cdp.exceptions[0]}`);
-    if (cdp.cspIssues.length) {
-      throw new Error(
-        "Renderer violated its content security policy: " +
-        `${cdp.cspIssues[0].violatedDirective}.`
-      );
-    }
-
-    const extensionRender = await smokeUnpackedExtension({
-      chromePath,
-      stageRoot
-    });
-
-    if (!quiet) {
-      console.log(
-        `Browser smoke test rendered ${png.width}x${png.height} ` +
-        `(${png.bytes} bytes) with no external requests.`
-      );
-      console.log(
-        `Unpacked MV3 extension rendered ` +
-        `${extensionRender.width}x${extensionRender.height} ` +
-        `(${extensionRender.bytes} bytes) through its Gmail content script, ` +
-        `service worker, and offscreen document.`
-      );
-    }
-    return {
-      ...png,
-      extension: extensionRender,
-      requests: cdp.requests
-    };
-  } catch (error) {
-    if (stderr.trim())
-      error.message += `\nChrome stderr:\n${stderr.trim()}`;
-    throw error;
-  } finally {
-    for (const connection of connections) {
-      try {
-        connection.close();
-      } catch {}
-    }
-    try {
-      await terminateBrowser(browser);
-    } finally {
-      await removeTemporaryTree(harness);
-      await removeTemporaryTree(profile);
-    }
   }
+  return result;
 }
 
 if (require.main === module) {
@@ -1303,18 +1175,18 @@ if (require.main === module) {
 }
 
 module.exports = {
-  chromeArguments,
   connectPipe,
   DYNAMIC_FILES,
   extensionChromeArguments,
   FIXTURE,
+  gmailSmokeDocument,
   INLINE_BREAK_FIXTURE,
-  createHarness,
   findChrome,
   protocolConnection,
   removeTemporaryTree,
   requirePng,
   smokeBrowser,
+  STYLED_UNICODE_FIXTURES,
   terminateBrowser,
   waitForEvaluation
 };

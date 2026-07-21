@@ -68,7 +68,13 @@ function listTrackedFiles({
   root = path.join(__dirname, ".."),
   git = runGit
 } = {}) {
-  const output = git(root, ["ls-files", "-z", "--cached"]);
+  let output;
+  try {
+    output = git(root, ["ls-files", "-z", "--cached"]);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    fail(`Cannot determine tracked files with Git: ${reason}`);
+  }
   const buffer = Buffer.isBuffer(output) ? output : Buffer.from(output);
   const filenames = buffer.toString("utf8").split("\0");
   if (filenames.at(-1) === "")
