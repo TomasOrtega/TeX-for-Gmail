@@ -33,6 +33,7 @@ function sourcePath(filename) {
 function loadBackground(options = {}) {
   const canvases = [];
   const communicators = [];
+  const fileReaders = [];
   const hosts = [];
   const mathJaxConfigs = [];
   const runtimeMessages = [];
@@ -211,6 +212,38 @@ function loadBackground(options = {}) {
     }
   }
 
+  class FakeFileReader {
+    constructor() {
+      this.listeners = new Map();
+      fileReaders.push(this);
+    }
+
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+
+    readAsDataURL(blob) {
+      this.blob = blob;
+      let reading;
+      if (options.fileReaderError)
+        reading = Promise.reject(options.fileReaderError);
+      else if (options.fileReaderResult !== undefined)
+        reading = Promise.resolve(options.fileReaderResult);
+      else {
+        reading = blob.arrayBuffer().then(buffer =>
+          `data:${blob.type};base64,${Buffer.from(buffer).toString("base64")}`
+        );
+      }
+      reading.then(result => {
+        this.result = result;
+        this.listeners.get("load")();
+      }, error => {
+        this.error = error;
+        this.listeners.get("error")();
+      });
+    }
+  }
+
   const chrome = {
     runtime: {
       id: "tex-for-gmail-test",
@@ -251,6 +284,7 @@ function loadBackground(options = {}) {
       timer.cleared = true;
     },
     document,
+    FileReader: FakeFileReader,
     Image: FakeImage,
     location: (() => {
       const pathname = options.locationPath ||
@@ -290,9 +324,6 @@ function loadBackground(options = {}) {
           return options.svgSource;
         return `<svg width="${svg.attributes.width}"></svg>`;
       }
-    },
-    btoa(binary) {
-      return Buffer.from(binary, "binary").toString("base64");
     }
   });
 
@@ -308,7 +339,7 @@ function loadBackground(options = {}) {
   }
 
   const api = vm.runInContext(`({
-    base64Encode,
+    blobDataUrl,
     canvasPng,
     compile2pngDataURL,
     loadMathJax,
@@ -318,7 +349,7 @@ function loadBackground(options = {}) {
     renderSvg,
     requireAlpha,
     requireDimensions,
-    requirePngFile,
+    requirePngBlob,
     requireScale,
     requireSource,
     validateRenderRequest,
@@ -331,6 +362,7 @@ function loadBackground(options = {}) {
     chrome,
     communicators,
     context,
+    fileReaders,
     hosts,
     mathJaxConfigs,
     onConnect,
@@ -429,6 +461,40 @@ test("background renders validated MathJax SVG output as a PNG data URL", async 
   assert.equal(
     runtime.timers.some(timer => timer.delay === 5 * 60 * 1000),
     false
+  );
+});
+
+test("background encodes PNG blobs without reading the complete blob in JavaScript", async () => {
+  const png = new Blob([PNG_BYTES], { type: "image/png" });
+  const sliceCalls = [];
+  const slice = png.slice.bind(png);
+  png.arrayBuffer = () => Promise.reject(new Error("full PNG read"));
+  png.slice = (...parameters) => {
+    sliceCalls.push(parameters);
+    return slice(...parameters);
+  };
+  const runtime = loadBackground({
+    canvasBlob: png,
+    fileReaderResult: "data:image/png;base64,iVBORw0KGgo="
+  });
+
+  const response = await runtime.api.compile2pngDataURL({
+    alpha: 1,
+    display: false,
+    scale: 1,
+    source: "x"
+  });
+
+  assert.equal(
+    response.payload.dataUrl,
+    "data:image/png;base64,iVBORw0KGgo="
+  );
+  assert.deepEqual(sliceCalls, [[0, 8]]);
+  assert.equal(runtime.fileReaders.length, 1);
+  assert.equal(runtime.fileReaders[0].blob, png);
+  assert.equal(
+    await vm.runInContext("renderQueue", runtime.context),
+    undefined
   );
 });
 
@@ -894,22 +960,28 @@ test("background validates every untrusted render field", () => {
   );
 });
 
-test("background rejects malformed or oversized PNG output", () => {
+test("background rejects malformed or oversized PNG output", async () => {
   const runtime = loadBackground();
-  assert.throws(() => runtime.api.requirePngFile(new Uint8Array(PNG_BYTES)));
-  assert.throws(() => runtime.api.requirePngFile(new ArrayBuffer(7)), /size/i);
-  assert.throws(
-    () => runtime.api.requirePngFile(new ArrayBuffer(8 * 1024 * 1024 + 1)),
+  await assert.rejects(
+    runtime.api.requirePngBlob(new Uint8Array(PNG_BYTES)),
+    /blob/i
+  );
+  await assert.rejects(
+    runtime.api.requirePngBlob(new Blob([new Uint8Array(7)])),
     /size/i
   );
-  assert.throws(
-    () => runtime.api.requirePngFile(new Uint8Array(8).buffer),
+  await assert.rejects(
+    runtime.api.requirePngBlob(
+      new Blob([new Uint8Array(8 * 1024 * 1024 + 1)])
+    ),
+    /size/i
+  );
+  await assert.rejects(
+    runtime.api.requirePngBlob(new Blob([new Uint8Array(8)])),
     /signature/i
   );
-  assert.equal(
-    runtime.api.requirePngFile(PNG_BYTES.slice().buffer).byteLength,
-    8
-  );
+  const valid = new Blob([PNG_BYTES], { type: "image/png" });
+  assert.equal(await runtime.api.requirePngBlob(valid), valid);
 });
 
 test("background resets failed MathJax loads so a later render can retry", async () => {
@@ -1020,13 +1092,13 @@ test("background handles SVG image and canvas failures", async () => {
     /could not be encoded/i
   );
 
-  const blobFailure = loadBackground({
-    canvasBlob: {
-      arrayBuffer() {
-        return Promise.reject(new Error("blob read failed"));
-      }
+  const unreadableBlob = new Blob([PNG_BYTES], { type: "image/png" });
+  unreadableBlob.slice = () => ({
+    arrayBuffer() {
+      return Promise.reject(new Error("blob read failed"));
     }
   });
+  const blobFailure = loadBackground({ canvasBlob: unreadableBlob });
   await assert.rejects(
     blobFailure.api.rasterizeSvg("<svg></svg>", 1, 1),
     /blob read failed/i
@@ -1069,14 +1141,18 @@ test("background propagates MathJax failures and enforces its deadline", async (
   assert.equal(pending.timers[0].cleared, true);
 });
 
-test("background base64 encoding preserves large typed-array views", () => {
+test("background data URL encoding preserves large typed-array views", async () => {
   const runtime = loadBackground();
   const source = new Uint8Array(70010);
   source.fill(0xff);
   source[5] = 0;
   source[70004] = 1;
+  const dataUrl = await runtime.api.blobDataUrl(
+    source.subarray(5, 70005),
+    "application/octet-stream"
+  );
   const decoded = Buffer.from(
-    runtime.api.base64Encode(source.subarray(5, 70005)),
+    dataUrl.slice(dataUrl.indexOf(",") + 1),
     "base64"
   );
 
@@ -1084,6 +1160,24 @@ test("background base64 encoding preserves large typed-array views", () => {
   assert.equal(decoded[0], 0);
   assert.equal(decoded[1], 0xff);
   assert.equal(decoded.at(-1), 1);
+});
+
+test("background reports native data URL encoding failures", async () => {
+  const runtime = loadBackground({
+    fileReaderError: new Error("data URL read failed")
+  });
+
+  await assert.rejects(
+    runtime.api.blobDataUrl(
+      new Blob([PNG_BYTES], { type: "image/png" }),
+      "image/png"
+    ),
+    /data URL read failed/i
+  );
+  assert.throws(
+    () => runtime.api.blobDataUrl("not binary", "image/png"),
+    /blob or buffer/i
+  );
 });
 
 test("background accepts only Gmail extension ports", () => {
