@@ -656,6 +656,10 @@ function loadComposeContent(source, options = {}) {
         ? undefined : scheduleToolbarSync,
       formattingAnchor: typeof formattingAnchor === "undefined"
         ? undefined : formattingAnchor,
+      delimitedMathInEditor: typeof delimitedMathInEditor === "undefined"
+        ? undefined : delimitedMathInEditor,
+      expressionBoundary: typeof expressionBoundary === "undefined"
+        ? undefined : expressionBoundary,
       markRenderedImage: typeof markRenderedImage === "undefined"
         ? undefined : markRenderedImage,
       rememberedRenderedSourceCount:
@@ -1346,6 +1350,60 @@ test("Gmail toolbar leaves excess formulas for the next batch", async () => {
     { ok: true, rendered: 1 }
   );
   assert.equal(runtime.requests.at(-1).source, "x_50");
+});
+
+test("math discovery stops after the batch lookahead", () => {
+  const runtime = loadComposeContent("");
+  const firstStream = runtime.createElement("p");
+  firstStream.textContent = Array.from({ length: 51 }, (_value, index) =>
+    `$x_${index}$`
+  ).join(" ");
+  const unvisitedStream = runtime.createElement("p");
+  Object.defineProperty(unvisitedStream, "childNodes", {
+    get() {
+      throw new Error("scanned beyond the batch lookahead");
+    }
+  });
+  runtime.editor.replaceChildren(firstStream, unvisitedStream);
+
+  const result = runtime.api.delimitedMathInEditor(runtime.editor);
+
+  assert.equal(result.expressions.length, 50);
+  assert.equal(result.truncated, true);
+  assert.equal(result.expressions.at(-1).text, "$x_49$");
+});
+
+test("ordered expression boundaries advance through segments once", () => {
+  const runtime = loadComposeContent("");
+  const segments = Array.from({ length: 100 }, (_value, index) => ({
+    end: index * 3 + 3,
+    node: { index },
+    start: index * 3
+  }));
+  let segmentReads = 0;
+  const stream = {
+    segments: new Proxy(segments, {
+      get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property))
+          segmentReads++;
+        return Reflect.get(target, property, receiver);
+      }
+    })
+  };
+  const cursor = { index: 0 };
+
+  for (let index = 0; index < 100; index++) {
+    assert.equal(
+      runtime.api.expressionBoundary(stream, index * 3, false, cursor).node,
+      segments[index].node
+    );
+    assert.equal(
+      runtime.api.expressionBoundary(stream, index * 3 + 3, true, cursor).node,
+      segments[index].node
+    );
+  }
+
+  assert.ok(segmentReads <= 300, `${segmentReads} segment reads`);
 });
 
 test("Gmail toolbar recovers one restarting renderer and rejects bad images", async () => {

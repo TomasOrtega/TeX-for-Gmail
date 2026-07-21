@@ -330,14 +330,14 @@ function sourceForRenderedImage(image) {
   return source;
 }
 
-function logicalMathStreams(editor) {
-  const streams = [];
+function* logicalMathStreams(editor) {
   let stream = { segments: [], text: "" };
 
-  function finishStream() {
-    if (stream.text)
-      streams.push(stream);
+  function* finishStream() {
+    const finished = stream;
     stream = { segments: [], text: "" };
+    if (finished.text)
+      yield finished;
   }
 
   function appendText(node) {
@@ -357,7 +357,7 @@ function logicalMathStreams(editor) {
       stream.text += "\n";
   }
 
-  function visit(node) {
+  function* visit(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       appendText(node);
       return;
@@ -366,7 +366,7 @@ function logicalMathStreams(editor) {
       return;
 
     if (node.matches?.(MATH_EXCLUDED_SELECTOR)) {
-      finishStream();
+      yield* finishStream();
       return;
     }
     if (node.tagName === "BR") {
@@ -374,14 +374,14 @@ function logicalMathStreams(editor) {
       return;
     }
     if (node !== editor && MATH_STREAM_BARRIER_TAGS.has(node.tagName)) {
-      finishStream();
+      yield* finishStream();
       return;
     }
     if (node !== editor && MATH_STREAM_BOUNDARY_TAGS.has(node.tagName)) {
-      finishStream();
+      yield* finishStream();
       for (const child of node.childNodes)
-        visit(child);
-      finishStream();
+        yield* visit(child);
+      yield* finishStream();
       return;
     }
 
@@ -390,22 +390,25 @@ function logicalMathStreams(editor) {
     if (breaksLine)
       appendStructuralLineBreak();
     for (const child of node.childNodes)
-      visit(child);
+      yield* visit(child);
     if (breaksLine)
       appendStructuralLineBreak();
   }
 
-  visit(editor);
-  finishStream();
-  return streams;
+  yield* visit(editor);
+  yield* finishStream();
 }
 
-function expressionBoundary(stream, index, end) {
+function expressionBoundary(stream, index, end, cursor = { index: 0 }) {
   const character = end ? index - 1 : index;
-  const segment = stream.segments.find(candidate =>
-    candidate.start <= character && character < candidate.end
-  );
-  if (!segment)
+  let segment = stream.segments[cursor.index];
+  while (segment && segment.end <= character) {
+    cursor.index++;
+    segment = stream.segments[cursor.index];
+  }
+  if (!segment ||
+      segment.start > character ||
+      character >= segment.end)
     return undefined;
   return {
     node: segment.node,
@@ -416,12 +419,24 @@ function expressionBoundary(stream, index, end) {
 function delimitedMathInEditor(editor) {
   const expressions = [];
   for (const stream of logicalMathStreams(editor)) {
-    const matches = TeXForGmail.findDelimitedMath(stream.text);
+    const resultLimit = MAX_BATCH_EXPRESSIONS - expressions.length + 1;
+    const matches = TeXForGmail.findDelimitedMath(stream.text, resultLimit);
+    const boundaryCursor = { index: 0 };
     for (const match of matches) {
       if (expressions.length === MAX_BATCH_EXPRESSIONS)
         return { expressions, truncated: true };
-      const start = expressionBoundary(stream, match.start, false);
-      const end = expressionBoundary(stream, match.end, true);
+      const start = expressionBoundary(
+        stream,
+        match.start,
+        false,
+        boundaryCursor
+      );
+      const end = expressionBoundary(
+        stream,
+        match.end,
+        true,
+        boundaryCursor
+      );
       if (!start || !end)
         continue;
       expressions.push({
