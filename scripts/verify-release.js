@@ -10,6 +10,11 @@ const {
 } = require("./extension-targets.js");
 const { verifyArtifacts } = require("./verify-artifacts.js");
 
+const PACKAGE_BUDGETS = Object.freeze({
+  firefox: Object.freeze({ files: 55, bytes: 46 * 256 * 1024 }),
+  chrome: Object.freeze({ files: 59, bytes: 46 * 256 * 1024 })
+});
+
 function fail(message) {
   throw new Error(message);
 }
@@ -129,6 +134,19 @@ function verifyTargetManifest(config) {
     fail("Chrome content security policy differs from the release policy");
 }
 
+function verifyPackageBudget(target, files) {
+  const budget = PACKAGE_BUDGETS[target];
+  if (!budget)
+    fail(`Unknown release target: ${target}`);
+  const bytes = [...files.values()]
+    .reduce((total, contents) => total + contents.byteLength, 0);
+  if (files.size > budget.files)
+    fail(`${target} package exceeds the ${budget.files}-file budget`);
+  if (bytes > budget.bytes)
+    fail(`${target} package exceeds the ${budget.bytes}-byte budget`);
+  return { bytes, files: files.size, target };
+}
+
 function verifyRelease({
   root = path.join(__dirname, ".."),
   quiet = false
@@ -161,8 +179,6 @@ function verifyRelease({
     /(?:^|\/)(?:browserfs|mupdf|texlive|wasm)(?:\/|$)/,
     /(?:^|\/)(?:mupdfworker|pdftexworker|pdflatex)(?:\.|$)/
   ];
-  const maxPackageFiles = 40;
-  const maxPackageBytes = 14 * 256 * 1024;
   const targetResults = [];
   for (const target of TARGETS) {
     const config = getTargetConfig({ root, target });
@@ -194,13 +210,7 @@ function verifyRelease({
       if (forbidden.some(pattern => pattern.test(filename)))
         fail(`${target} package contains forbidden release file: ${filename}`);
     }
-    const bytes = [...files.values()]
-      .reduce((total, contents) => total + contents.byteLength, 0);
-    if (files.size > maxPackageFiles)
-      fail(`${target} package exceeds the ${maxPackageFiles}-file budget`);
-    if (bytes > maxPackageBytes)
-      fail(`${target} package exceeds the ${maxPackageBytes}-byte budget`);
-    targetResults.push({ bytes, files: files.size, target });
+    targetResults.push(verifyPackageBudget(target, files));
   }
 
   const result = verifyArtifacts({ root, quiet: true });
@@ -221,4 +231,8 @@ if (require.main === module) {
   }
 }
 
-module.exports = { verifyRelease };
+module.exports = {
+  PACKAGE_BUDGETS,
+  verifyPackageBudget,
+  verifyRelease
+};

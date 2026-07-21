@@ -170,6 +170,42 @@ test("release metadata and packaged files pass validation", () => {
   assert.doesNotThrow(() => verifyRelease({ root, quiet: true }));
 });
 
+test("release package budgets cap target counts and bytes", () => {
+  const {
+    PACKAGE_BUDGETS,
+    verifyPackageBudget
+  } = require("../scripts/verify-release.js");
+  const maxBytes = 46 * 256 * 1024;
+
+  assert.deepEqual(PACKAGE_BUDGETS, {
+    firefox: { files: 55, bytes: maxBytes },
+    chrome: { files: 59, bytes: maxBytes }
+  });
+  for (const [target, budget] of Object.entries(PACKAGE_BUDGETS)) {
+    const files = new Map(Array.from(
+      { length: budget.files },
+      (_, index) => [`file-${index}`, Buffer.alloc(index ? 0 : budget.bytes)]
+    ));
+    assert.deepEqual(verifyPackageBudget(target, files), {
+      bytes: budget.bytes,
+      files: budget.files,
+      target
+    });
+
+    files.set("one-file-too-many", Buffer.alloc(0));
+    assert.throws(
+      () => verifyPackageBudget(target, files),
+      new RegExp(`${target} package exceeds the ${budget.files}-file budget`)
+    );
+    assert.throws(
+      () => verifyPackageBudget(target, new Map([
+        ["oversized", Buffer.alloc(budget.bytes + 1)]
+      ])),
+      new RegExp(`${target} package exceeds the ${budget.bytes}-byte budget`)
+    );
+  }
+});
+
 test("release ZIP must exactly match the extension source tree", t => {
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tex-gmail-zip-"));
   const extensionRoot = path.join(fixtureRoot, "chrome-extension");
