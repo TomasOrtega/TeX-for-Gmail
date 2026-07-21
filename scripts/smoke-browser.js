@@ -35,6 +35,7 @@ const SMOKE_RENDER_LABELS = Object.freeze([
   "macro-baseline",
   "macro-mutation",
   "macro-isolated",
+  "multiline",
   ...STYLED_UNICODE_FIXTURES.map(({ label }) => label)
 ]);
 const DYNAMIC_FILES = Object.freeze([
@@ -502,6 +503,11 @@ function gmailSmokeDocument() {
         <div data-smoke-render="macro-baseline">\\(${MACRO_BASELINE_FIXTURE}\\)</div>
         <div data-smoke-render="macro-mutation">\\(${MACRO_MUTATION_FIXTURE}\\)</div>
         <div data-smoke-render="macro-isolated">\\(${MACRO_ISOLATED_FIXTURE}\\)</div>
+        <div data-smoke-render="multiline" data-smoke-multiline="success">
+          <div data-smoke-line="first">$$x</div>
+          <div data-smoke-line="second">+y$$</div>
+          <div data-smoke-line="after">after</div>
+        </div>
         ${STYLED_UNICODE_FIXTURES.map(({ label, source }) =>
           `<div data-smoke-render="${label}">\\(${escapeHtml(source)}\\)</div>`
         ).join("\n        ")}
@@ -918,8 +924,18 @@ async function smokeUnpackedExtension({
           )?.src;
         }
         if (Object.values(images).every(Boolean)) {
+          const multiline = document.querySelector(
+            '[data-smoke-multiline="success"]'
+          );
           return {
             images,
+            multiline: [...multiline.children].map(line => ({
+              images: line.querySelectorAll(
+                'img[data-tex-for-gmail-rendered="1"]'
+              ).length,
+              label: line.dataset.smokeLine,
+              text: line.textContent
+            })),
             ok: true,
             rendered: document.querySelectorAll(
               'img[data-tex-for-gmail-rendered="1"]'
@@ -942,6 +958,67 @@ async function smokeUnpackedExtension({
       throw new Error(
         result.error ||
         `Gmail did not render ${SMOKE_RENDER_LABELS.length} expressions.`
+      );
+    }
+    if (JSON.stringify(result.multiline) !== JSON.stringify([
+      { images: 1, label: "first", text: "" },
+      { images: 0, label: "after", text: "after" }
+    ])) {
+      throw new Error(
+        "Multiline rendering did not remove its consumed Gmail line: " +
+        JSON.stringify(result.multiline)
+      );
+    }
+    const multilineFailure = await evaluateValue(
+      gmail,
+      `(async () => {
+        const editor = document.querySelector("#editor");
+        const host = document.createElement("div");
+        host.dataset.smokeMultiline = "failure";
+        host.innerHTML = ${JSON.stringify(
+          '<div data-smoke-line="first">$$x</div>' +
+          '<div data-smoke-line="second">+y$$</div>' +
+          '<div data-smoke-line="after">after</div>'
+        )};
+        editor.append(host);
+        const originalLines = [...host.children];
+        const compile = compileWithRendererSession;
+        compileWithRendererSession = async () => {
+          throw new Error("Forced browser smoke render failure.");
+        };
+        try {
+          const outcome = await renderAllMathInEditor(editor);
+          return {
+            lines: [...host.children].map(line => ({
+              label: line.dataset.smokeLine,
+              text: line.textContent
+            })),
+            outcome,
+            pending: host.querySelectorAll(
+              "[data-tex-for-gmail-pending]"
+            ).length,
+            sameNodes: originalLines.every(
+              (line, index) => host.children[index] === line
+            )
+          };
+        } finally {
+          compileWithRendererSession = compile;
+        }
+      })()`,
+      true,
+      extensionContext.id
+    );
+    if (multilineFailure.outcome?.ok !== false ||
+        multilineFailure.outcome?.rendered !== 0 ||
+        multilineFailure.pending !== 0 ||
+        multilineFailure.sameNodes !== true ||
+        JSON.stringify(multilineFailure.lines) !== JSON.stringify([
+          { label: "first", text: "$$x" },
+          { label: "second", text: "+y$$" },
+          { label: "after", text: "after" }
+        ])) {
+      throw new Error(
+        "A failed multiline render did not restore its exact Gmail lines."
       );
     }
     const renderedPngs = Object.fromEntries(

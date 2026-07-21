@@ -436,6 +436,129 @@ function delimitedMathInEditor(editor) {
   return { expressions, truncated: false };
 }
 
+function gmailLineContainer(node, editor) {
+  let current = node.nodeType === Node.ELEMENT_NODE
+    ? node
+    : node.parentElement;
+  while (current && current !== editor) {
+    if (current.tagName === "DIV")
+      return current;
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+function commonAncestor(first, second) {
+  const firstAncestors = new Set();
+  for (let node = first; node; node = node.parentNode)
+    firstAncestors.add(node);
+  for (let node = second; node; node = node.parentNode) {
+    if (firstAncestors.has(node))
+      return node;
+  }
+}
+
+function childWithin(node, ancestor) {
+  let child = node;
+  while (child?.parentNode && child.parentNode !== ancestor)
+    child = child.parentNode;
+  return child?.parentNode === ancestor ? child : undefined;
+}
+
+function snapshotSubtree(node) {
+  return {
+    children: [...node.childNodes].map(snapshotSubtree),
+    data: node.nodeType === Node.TEXT_NODE ? node.data : undefined,
+    node
+  };
+}
+
+function restoreSubtree(snapshot) {
+  if (snapshot.node.nodeType === Node.TEXT_NODE) {
+    snapshot.node.data = snapshot.data;
+    return;
+  }
+  snapshot.node.replaceChildren(
+    ...snapshot.children.map(child => child.node)
+  );
+  for (const child of snapshot.children)
+    restoreSubtree(child);
+}
+
+function lineHasContent(node) {
+  if (node.nodeType === Node.TEXT_NODE)
+    return node.data.length > 0;
+  if (node.nodeType !== Node.ELEMENT_NODE)
+    return false;
+  if (node.tagName === "BR" ||
+      MATH_STREAM_BARRIER_TAGS.has(node.tagName) ||
+      node.matches?.(MATH_EXCLUDED_SELECTOR))
+    return true;
+  return [...node.childNodes].some(lineHasContent);
+}
+
+function multilineRangeTransaction(expression, editor) {
+  const startLine = gmailLineContainer(expression.startNode, editor);
+  const endLine = gmailLineContainer(expression.endNode, editor);
+  if (startLine === endLine)
+    return undefined;
+
+  const parent = commonAncestor(expression.startNode, expression.endNode);
+  if (!parent || (parent !== editor && !editor.contains(parent)))
+    return undefined;
+  const startRoot = childWithin(expression.startNode, parent);
+  const endRoot = childWithin(expression.endNode, parent);
+  if (!startRoot || !endRoot || startRoot === endRoot)
+    return undefined;
+
+  const siblings = [...parent.childNodes];
+  const startIndex = siblings.indexOf(startRoot);
+  const endIndex = siblings.indexOf(endRoot);
+  if (startIndex < 0 || endIndex <= startIndex)
+    return undefined;
+
+  const roots = siblings.slice(startIndex, endIndex + 1);
+  const snapshots = roots.map(snapshotSubtree);
+  const before = document.createTextNode("");
+  const after = document.createTextNode("");
+  parent.insertBefore(before, startRoot);
+  parent.insertBefore(after, endRoot.nextSibling);
+
+  function finish() {
+    before.remove();
+    after.remove();
+  }
+
+  return {
+    commit(replacement) {
+      if (replacement && startLine && startLine !== parent)
+        startLine.append(replacement);
+      for (const root of roots.slice(1, -1))
+        root.remove();
+      if (endRoot === endLine && !lineHasContent(endLine))
+        endLine.remove();
+      finish();
+    },
+    restore() {
+      const intact = before.parentNode === parent &&
+        after.parentNode === parent;
+      if (intact) {
+        for (let node = before.nextSibling; node && node !== after;) {
+          const next = node.nextSibling;
+          node.remove();
+          node = next;
+        }
+        for (const snapshot of snapshots)
+          restoreSubtree(snapshot);
+        for (const root of roots)
+          parent.insertBefore(root, after);
+      }
+      finish();
+      return intact;
+    }
+  };
+}
+
 function pendingMathExpression(expression, editor) {
   if (!expression.startNode.isConnected ||
       !expression.endNode.isConnected ||
@@ -446,12 +569,13 @@ function pendingMathExpression(expression, editor) {
   const pending = document.createElement("span");
   pending.dataset.texForGmailPending = "1";
   pending.textContent = expression.text;
+  const transaction = multilineRangeTransaction(expression, editor);
   const range = document.createRange();
   range.setStart(expression.startNode, expression.startOffset);
   range.setEnd(expression.endNode, expression.endOffset);
   const original = range.extractContents();
   range.insertNode(pending);
-  return { original, pending };
+  return { original, pending, transaction };
 }
 
 async function renderAllMathInEditor(editor) {
@@ -478,7 +602,12 @@ async function renderAllMathInEditor(editor) {
         pendingExpressions.unshift({ expression, ...pendingExpression });
     }
 
-    for (const { expression, original, pending } of pendingExpressions) {
+    for (const {
+      expression,
+      original,
+      pending,
+      transaction
+    } of pendingExpressions) {
       try {
         const normalized = TeXForGmail.normalizeInput(expression.text);
         const dataUrl = await compileWithRendererSession(
@@ -497,18 +626,23 @@ async function renderAllMathInEditor(editor) {
             !editor.contains(pending) ||
             pending.textContent !== expression.text) {
           pending.removeAttribute("data-tex-for-gmail-pending");
+          transaction?.commit(editor.contains(pending) ? pending : undefined);
           continue;
         }
         pending.replaceWith(image);
+        transaction?.commit(image);
         rendered++;
       } catch (error) {
         failures++;
         if (pending.isConnected &&
             editor.contains(pending) &&
-            pending.textContent === expression.text)
-          pending.replaceWith(original);
-        else
+            pending.textContent === expression.text) {
+          if (!transaction?.restore())
+            pending.replaceWith(original);
+        } else {
           pending.removeAttribute("data-tex-for-gmail-pending");
+          transaction?.commit(editor.contains(pending) ? pending : undefined);
+        }
       }
     }
     if (rendered)

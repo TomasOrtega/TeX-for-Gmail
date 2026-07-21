@@ -257,6 +257,13 @@ function loadComposeContent(source, options = {}) {
       if (name.startsWith("data-"))
         delete this.dataset[dataKey(name)];
     }
+
+    replaceChildren(...nodes) {
+      for (const child of this.childNodes)
+        child.parentNode = undefined;
+      this.childNodes = [];
+      this.append(...nodes);
+    }
   }
 
   class FakeRange {
@@ -860,6 +867,137 @@ test("Gmail toolbar restores Gmail line markup after a render failure",
     assert.deepEqual(line.childNodes, [strong, lineBreak, emphasis]);
     assert.equal(strong.textContent, "^2");
     assert.equal(emphasis.textContent, " + y");
+  });
+
+test("Gmail toolbar replaces multiline math without empty Gmail lines",
+  async () => {
+    const runtime = loadComposeContent("");
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: true, rendered: 1 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.ok(firstLine.querySelector(
+      'img[data-tex-for-gmail-rendered="1"]'
+    ));
+    assert.equal(firstLine.textContent, "");
+    assert.equal(secondLine.parentNode, undefined);
+    assert.equal(afterLine.textContent, "after");
+  });
+
+test("Gmail toolbar restores exact multiline Gmail lines after failure",
+  async () => {
+    const runtime = loadComposeContent("", {
+      request() {
+        return Promise.reject({ err: "Formula rejected." });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    const firstText = runtime.document.createTextNode("$$x");
+    const secondText = runtime.document.createTextNode("+y$$");
+    firstLine.append(firstText);
+    secondLine.append(secondText);
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    assert.deepEqual(
+      { ...await runtime.api.renderAllMathInEditor(runtime.editor) },
+      { ok: false, rendered: 0 }
+    );
+    assert.deepEqual(
+      runtime.editor.childNodes,
+      [firstLine, secondLine, afterLine]
+    );
+    assert.deepEqual(firstLine.childNodes, [firstText]);
+    assert.deepEqual(secondLine.childNodes, [secondText]);
+    assert.equal(firstText.data, "$$x");
+    assert.equal(secondText.data, "+y$$");
+    assert.equal(afterLine.textContent, "after");
+  });
+
+test("Gmail toolbar keeps changed multiline math without empty lines",
+  async () => {
+    let resolveRender;
+    const runtime = loadComposeContent("", {
+      request() {
+        return new Promise(resolve => {
+          resolveRender = resolve;
+        });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    const pending = runtime.editor.querySelector(
+      "[data-tex-for-gmail-pending]"
+    );
+    pending.textContent = "$z$";
+    resolveRender({ dataUrl: "data:image/png;base64,iVBORw0KGgo=" });
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: true, rendered: 0 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.equal(firstLine.textContent, "$z$");
+    assert.equal(
+      runtime.editor.querySelector("[data-tex-for-gmail-pending]"),
+      undefined
+    );
+    assert.equal(secondLine.parentNode, undefined);
+  });
+
+test("Gmail toolbar does not restore removed multiline pending math",
+  async () => {
+    let rejectRender;
+    const runtime = loadComposeContent("", {
+      request() {
+        return new Promise((_resolve, reject) => {
+          rejectRender = reject;
+        });
+      }
+    });
+    const firstLine = runtime.createElement("div");
+    const secondLine = runtime.createElement("div");
+    const afterLine = runtime.createElement("div");
+    firstLine.append("$$x");
+    secondLine.append("+y$$");
+    afterLine.append("after");
+    runtime.editor.textContent = "";
+    runtime.editor.append(firstLine, secondLine, afterLine);
+
+    const rendering = runtime.api.renderAllMathInEditor(runtime.editor);
+    await new Promise(resolve => setImmediate(resolve));
+    runtime.editor.querySelector("[data-tex-for-gmail-pending]").remove();
+    rejectRender(new Error("Renderer failed."));
+
+    assert.deepEqual(
+      { ...await rendering },
+      { ok: false, rendered: 0 }
+    );
+    assert.deepEqual(runtime.editor.childNodes, [firstLine, afterLine]);
+    assert.equal(firstLine.textContent, "");
+    assert.equal(secondLine.parentNode, undefined);
   });
 
 test("Gmail toolbar renders multiline AMS math across Gmail line markup",

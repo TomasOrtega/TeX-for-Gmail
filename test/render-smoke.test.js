@@ -36,7 +36,8 @@ test("extension browser smoke covers renderer regressions in Gmail", () => {
       "macro-mutation",
       String.raw`\(\renewcommand{\frac}[2]{X}\frac{1}{2}\)`
     ],
-    ["macro-isolated", String.raw`\(\frac {1}{2}\)`]
+    ["macro-isolated", String.raw`\(\frac {1}{2}\)`],
+    ["multiline", "<div data-smoke-line=\"first\">$$x</div>"]
   ]) {
     assert.ok(document.includes(`data-smoke-render="${fixture[0]}"`));
     assert.ok(document.includes(fixture[1]));
@@ -56,6 +57,8 @@ test("extension browser smoke covers renderer regressions in Gmail", () => {
     assert.ok(document.includes(`data-smoke-render="${label}"`));
     assert.ok(document.includes(`\\(${source}\\)`));
   }
+  assert.ok(document.includes('data-smoke-line="second">+y$$</div>'));
+  assert.ok(document.includes('data-smoke-line="after">after</div>'));
 });
 
 test("browser smoke fixture covers the supported AMS and font features", () => {
