@@ -12,8 +12,15 @@ const RENDERER_RESTARTING_ERROR = "The renderer is restarting.";
 const GMAIL_EDITOR_SELECTOR =
   '[g_editable="true"][contenteditable="true"][role="textbox"]';
 const GMAIL_BOLD_SELECTOR = '[command="+bold"], [command="bold"]';
+const GMAIL_TOOLBAR_SELECTOR = '[role="toolbar"]';
 const RENDERED_IMAGE_SELECTOR = 'img[data-tex-for-gmail-rendered="1"]';
 const TOOLBAR_BUTTON_SELECTOR = '[data-tex-for-gmail-toolbar-button]';
+const TOOLBAR_STRUCTURE_SELECTOR =
+  `${GMAIL_EDITOR_SELECTOR}, ${GMAIL_BOLD_SELECTOR}, ` +
+  `${GMAIL_TOOLBAR_SELECTOR}, ${TOOLBAR_BUTTON_SELECTOR}`;
+const EXTENSION_MUTATION_SELECTOR =
+  "#tex-for-gmail-status, [data-tex-for-gmail-pending], " +
+  RENDERED_IMAGE_SELECTOR;
 const MATH_EXCLUDED_SELECTOR =
   '[contenteditable="false"], blockquote, .gmail_quote, ' +
   '[data-tex-for-gmail-pending], [data-tex-for-gmail-rendered]';
@@ -85,6 +92,8 @@ let statusTimer;
 let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
+const editorToolbarAssociations = new WeakMap();
+const pendingToolbarScopes = new Set();
 const toolbarButtonEditors = new WeakMap();
 const renderedSources = new WeakMap();
 const renderedSourcesByToken = new Map();
@@ -817,31 +826,57 @@ function configureGmailEditor(editor) {
   editor.addEventListener("dblclick", handleEditorDoubleClick);
 }
 
-function formattingAnchor(editor) {
-  let match;
-  for (const anchor of document.querySelectorAll(GMAIL_BOLD_SELECTOR)) {
-    const toolbar = anchor.closest?.('[role="toolbar"]');
-    if (!toolbar)
-      continue;
+function matchingElements(scope, selector) {
+  const matches = [];
+  if (scope?.nodeType === Node.ELEMENT_NODE && scope.matches?.(selector))
+    matches.push(scope);
+  matches.push(...scope.querySelectorAll(selector));
+  return matches;
+}
 
-    for (let scope = editor.parentElement; scope; scope = scope.parentElement) {
-      if (!scope.contains?.(toolbar))
-        continue;
-      const editors = scope.querySelectorAll?.(GMAIL_EDITOR_SELECTOR);
-      if (!editors || editors.length !== 1 || editors[0] !== editor)
-        break;
-      if (match)
-        return undefined;
-      match = anchor;
-      break;
-    }
+function formattingScope(editor, anchor) {
+  const toolbar = anchor.closest?.(GMAIL_TOOLBAR_SELECTOR);
+  if (!toolbar)
+    return undefined;
+
+  for (let scope = editor.parentElement; scope; scope = scope.parentElement) {
+    if (!scope.contains?.(toolbar))
+      continue;
+    const editors = matchingElements(scope, GMAIL_EDITOR_SELECTOR);
+    return editors.length === 1 && editors[0] === editor
+      ? scope
+      : undefined;
   }
+  return undefined;
+}
+
+function formattingAnchor(editor, anchors = matchingElements(
+  document,
+  GMAIL_BOLD_SELECTOR
+)) {
+  let match;
+  let scope;
+  for (const anchor of anchors) {
+    const candidateScope = formattingScope(editor, anchor);
+    if (!candidateScope)
+      continue;
+    if (match) {
+      editorToolbarAssociations.delete(editor);
+      return undefined;
+    }
+    match = anchor;
+    scope = candidateScope;
+  }
+  if (match)
+    editorToolbarAssociations.set(editor, { anchor: match, scope });
+  else
+    editorToolbarAssociations.delete(editor);
   return match;
 }
 
-function installGmailToolbarButton(editor) {
+function installGmailToolbarButton(editor, anchors) {
   configureGmailEditor(editor);
-  const anchor = formattingAnchor(editor);
+  const anchor = formattingAnchor(editor, anchors);
   const parent = anchor?.parentElement;
   if (!parent)
     return;
@@ -880,19 +915,145 @@ function installGmailToolbarButton(editor) {
   }
 }
 
-function syncGmailToolbars() {
-  for (const editor of document.querySelectorAll(GMAIL_EDITOR_SELECTOR))
-    installGmailToolbarButton(editor);
+function syncGmailToolbars(scope = document) {
+  const editors = matchingElements(scope, GMAIL_EDITOR_SELECTOR);
+  const anchors = matchingElements(scope, GMAIL_BOLD_SELECTOR);
+  for (const editor of editors)
+    installGmailToolbarButton(editor, anchors);
 }
 
-function scheduleToolbarSync() {
+function toolbarScopeContains(scope, candidate) {
+  return scope === document || scope === candidate || scope.contains?.(candidate);
+}
+
+function queueToolbarScope(scope) {
+  for (const queued of pendingToolbarScopes) {
+    if (toolbarScopeContains(queued, scope))
+      return;
+    if (toolbarScopeContains(scope, queued))
+      pendingToolbarScopes.delete(queued);
+  }
+  pendingToolbarScopes.add(scope);
+}
+
+function flushToolbarSync() {
+  const scopes = [...pendingToolbarScopes];
+  pendingToolbarScopes.clear();
+  toolbarRefreshQueued = false;
+  for (const scope of scopes) {
+    if (scope === document || scope.isConnected)
+      syncGmailToolbars(scope);
+  }
+}
+
+function scheduleToolbarSync(scope = document) {
+  queueToolbarScope(scope);
   if (toolbarRefreshQueued)
     return;
   toolbarRefreshQueued = true;
-  queueMicrotask(() => {
-    toolbarRefreshQueued = false;
-    syncGmailToolbars();
-  });
+  if (typeof requestAnimationFrame === "function")
+    requestAnimationFrame(flushToolbarSync);
+  else
+    queueMicrotask(flushToolbarSync);
+}
+
+function elementForNode(node) {
+  return node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+}
+
+function configuredEditorContaining(node) {
+  const element = elementForNode(node);
+  const editor = element?.matches?.(GMAIL_EDITOR_SELECTOR)
+    ? element
+    : element?.closest?.(GMAIL_EDITOR_SELECTOR);
+  return configuredEditors.has(editor) ? editor : undefined;
+}
+
+function extensionOwnedNode(node) {
+  const element = elementForNode(node);
+  return Boolean(element?.closest?.(EXTENSION_MUTATION_SELECTOR));
+}
+
+function installedToolbarButton(node) {
+  const button = elementForNode(node)?.closest?.(TOOLBAR_BUTTON_SELECTOR);
+  return Boolean(button && toolbarButtonEditors.has(button));
+}
+
+function containsToolbarStructure(node) {
+  const element = elementForNode(node);
+  return Boolean(element && (
+    element.matches?.(TOOLBAR_STRUCTURE_SELECTOR) ||
+    element.querySelector?.(TOOLBAR_STRUCTURE_SELECTOR)
+  ));
+}
+
+function containsSelector(scope, selector) {
+  return scope.matches?.(selector) || scope.querySelector?.(selector);
+}
+
+function toolbarScopeForNode(node) {
+  const element = elementForNode(node);
+  const editor = configuredEditorContaining(element);
+  const association = editor && editorToolbarAssociations.get(editor);
+  if (association?.scope?.isConnected && association.scope.contains(editor))
+    return association.scope;
+
+  const button = element?.closest?.(TOOLBAR_BUTTON_SELECTOR);
+  const buttonEditor = button && toolbarButtonEditors.get(button);
+  const buttonAssociation = buttonEditor &&
+    editorToolbarAssociations.get(buttonEditor);
+  if (buttonAssociation?.scope?.isConnected &&
+      buttonAssociation.scope.contains(button))
+    return buttonAssociation.scope;
+
+  for (let scope = element; scope && scope !== document.body;
+    scope = scope.parentElement) {
+    const hasEditor = containsSelector(scope, GMAIL_EDITOR_SELECTOR);
+    const hasToolbar = containsSelector(scope, GMAIL_TOOLBAR_SELECTOR) ||
+      containsSelector(scope, GMAIL_BOLD_SELECTOR);
+    if (hasEditor && hasToolbar)
+      return scope;
+    if (scope.matches?.('[role="dialog"]'))
+      return scope;
+  }
+  return undefined;
+}
+
+function handleToolbarMutations(records) {
+  for (const record of records) {
+    if (configuredEditorContaining(record.target) ||
+        extensionOwnedNode(record.target))
+      continue;
+    const changedNodes = [
+      ...(record.addedNodes || []),
+      ...(record.removedNodes || [])
+    ];
+    if (!changedNodes.length || changedNodes.every(extensionOwnedNode))
+      continue;
+    if (!(record.removedNodes || []).length &&
+        (record.addedNodes || []).length &&
+        [...record.addedNodes].every(installedToolbarButton))
+      continue;
+    const relevantNodes = changedNodes.filter(containsToolbarStructure);
+    if (!relevantNodes.length)
+      continue;
+
+    let scheduled = false;
+    for (const node of relevantNodes) {
+      if (!node.isConnected)
+        continue;
+      const scope = toolbarScopeForNode(node);
+      if (scope) {
+        scheduleToolbarSync(scope);
+        scheduled = true;
+      }
+    }
+    if (!scheduled) {
+      const scope = toolbarScopeForNode(record.target);
+      if (scope)
+        scheduleToolbarSync(scope);
+    }
+  }
 }
 
 function startGmailToolbarIntegration() {
@@ -902,13 +1063,15 @@ function startGmailToolbarIntegration() {
   if (typeof MutationObserver !== "function")
     return;
 
-  new MutationObserver(scheduleToolbarSync).observe(document.body, {
+  new MutationObserver(handleToolbarMutations).observe(document.body, {
     childList: true,
     subtree: true
   });
 }
 
-document.addEventListener("focusin", () => {
-  scheduleToolbarSync();
+document.addEventListener("focusin", event => {
+  const scope = toolbarScopeForNode(event?.target);
+  if (scope)
+    scheduleToolbarSync(scope);
 });
 startGmailToolbarIntegration();

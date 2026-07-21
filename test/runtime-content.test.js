@@ -24,7 +24,9 @@ function loadComposeContent(source, options = {}) {
   const editorEvents = [];
   const ports = [];
   const requests = [];
+  const selectorQueries = [];
   const timers = [];
+  const animationFrames = [];
   let connectCount = 0;
   let sourceTokenCounter = 0;
 
@@ -241,6 +243,7 @@ function loadComposeContent(source, options = {}) {
     }
 
     querySelectorAll(selector) {
+      selectorQueries.push({ root: this, selector });
       return descendants(this).filter(node =>
         node.nodeType === 1 && matchesSelector(node, selector)
       );
@@ -622,6 +625,10 @@ function loadComposeContent(source, options = {}) {
     },
     Promise,
     queueMicrotask,
+    requestAnimationFrame: options.noAnimationFrame ? undefined : callback => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    },
     setTimeout(callback, delay) {
       timers.push({ callback, delay });
       return timers.length;
@@ -668,6 +675,7 @@ function loadComposeContent(source, options = {}) {
       sourceForRenderedImage: typeof sourceForRenderedImage === "undefined"
         ? undefined : sourceForRenderedImage
     })`, context),
+    animationFrames,
     bold,
     bootstrapMessages,
     commands,
@@ -683,6 +691,10 @@ function loadComposeContent(source, options = {}) {
     documentListeners,
     editor,
     editorEvents,
+    flushAnimationFrames() {
+      for (const callback of animationFrames.splice(0))
+        callback();
+    },
     makeElementRange(node, startOffset, endOffset = startOffset) {
       const range = new FakeRange();
       range.setStart(node, startOffset);
@@ -698,11 +710,12 @@ function loadComposeContent(source, options = {}) {
     },
     ports,
     requests,
+    selectorQueries,
     selection,
     toolbar,
     timers,
-    triggerMutation() {
-      mutationCallback?.([]);
+    triggerMutation(records = []) {
+      mutationCallback?.(records);
     }
   };
 }
@@ -1281,12 +1294,28 @@ test("Gmail toolbar declines ambiguous or non-toolbar formatting controls", () =
     undefined
   );
 
+  const detachedToolbar = shared.createElement("div");
+  detachedToolbar.setAttribute("role", "toolbar");
+  const detachedBold = shared.createElement("div");
+  detachedBold.setAttribute("command", "+bold");
+  detachedToolbar.append(detachedBold);
+  assert.equal(
+    shared.api.formattingAnchor(shared.editor, [detachedBold]),
+    undefined
+  );
+
   const unrelated = loadComposeContent("$x$", {
     boldOutsideToolbar: true,
     withToolbar: false
   });
   assert.equal(unrelated.dialog.querySelector(buttonSelector), undefined);
   assert.equal(unrelated.api.formattingAnchor(unrelated.editor), undefined);
+
+  const duplicate = loadComposeContent("$x$");
+  const duplicateBold = duplicate.createElement("div");
+  duplicateBold.setAttribute("command", "+bold");
+  duplicate.toolbar.append(duplicateBold);
+  assert.equal(duplicate.api.formattingAnchor(duplicate.editor), undefined);
 });
 
 test("Gmail toolbar ignores rich-text fields that are not compose bodies", () => {
@@ -1690,21 +1719,140 @@ test("Gmail toolbar activation tracks dynamically added compose windows", async 
   assert.deepEqual(runtime.requests.map(request => request.source), ["x"]);
 
   const dynamic = runtime.createCompose("$y$");
-  runtime.api.scheduleToolbarSync();
-  runtime.api.scheduleToolbarSync();
-  await Promise.resolve();
+  runtime.api.scheduleToolbarSync(dynamic.dialog);
+  runtime.api.scheduleToolbarSync(dynamic.dialog);
+  runtime.flushAnimationFrames();
   assert.ok(dynamic.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
 
   const observed = runtime.createCompose("$z$");
-  runtime.triggerMutation();
-  await Promise.resolve();
+  runtime.triggerMutation([{
+    addedNodes: [observed.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
   assert.ok(observed.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
 
-  runtime.documentListeners.get("focusin")();
-  await Promise.resolve();
+  runtime.documentListeners.get("focusin")({ target: observed.editor });
+  runtime.flushAnimationFrames();
+
+  const outsideCompose = runtime.createElement("input");
+  runtime.document.documentElement.append(outsideCompose);
+  runtime.documentListeners.get("focusin")({ target: outsideCompose });
+  assert.equal(runtime.animationFrames.length, 0);
 
   const noObserver = loadComposeContent("$x$", { noMutationObserver: true });
   assert.ok(noObserver.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
+  const focusActivated = noObserver.createCompose("$focus$");
+  noObserver.documentListeners.get("focusin")({ target: focusActivated.editor });
+  noObserver.flushAnimationFrames();
+  assert.ok(focusActivated.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+
+  const fallback = loadComposeContent("$x$", { noAnimationFrame: true });
+  const fallbackDynamic = fallback.createCompose("$fallback$");
+  fallback.api.scheduleToolbarSync(fallbackDynamic.dialog);
+  await Promise.resolve();
+  assert.ok(fallbackDynamic.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+});
+
+test("Gmail toolbar ignores extension-owned editor and status mutations",
+  async () => {
+    const runtime = loadComposeContent("$x$");
+    const pending = runtime.createElement("span");
+    pending.dataset.texForGmailPending = "1";
+    const image = runtime.createElement("img");
+    image.dataset.texForGmailRendered = "1";
+    const status = runtime.createElement("div");
+    status.id = "tex-for-gmail-status";
+    const installedButton = runtime.toolbar.querySelector(
+      "[data-tex-for-gmail-toolbar-button]"
+    );
+    runtime.editor.append(pending);
+    runtime.document.documentElement.append(status);
+    runtime.selectorQueries.length = 0;
+
+    const records = [
+      {
+        addedNodes: [pending],
+        removedNodes: [],
+        target: runtime.editor,
+        type: "childList"
+      },
+      {
+        addedNodes: [image],
+        removedNodes: [pending],
+        target: runtime.editor,
+        type: "childList"
+      },
+      {
+        addedNodes: [status],
+        removedNodes: [],
+        target: runtime.document.documentElement,
+        type: "childList"
+      },
+      {
+        addedNodes: [],
+        removedNodes: [],
+        target: status,
+        type: "childList"
+      },
+      {
+        addedNodes: [installedButton],
+        removedNodes: [],
+        target: runtime.toolbar,
+        type: "childList"
+      }
+    ];
+    for (let turn = 0; turn < 100; turn++) {
+      runtime.triggerMutation(records);
+      await Promise.resolve();
+    }
+
+    assert.equal(runtime.animationFrames.length, 0);
+    assert.equal(runtime.selectorQueries.length, 0);
+  });
+
+test("Gmail toolbar coalesces and scopes compose reconciliation", async () => {
+  const runtime = loadComposeContent("$initial$");
+  const unobserved = runtime.createCompose("$unobserved$");
+  const first = runtime.createCompose("$first$");
+  const second = runtime.createCompose("$second$");
+  runtime.selectorQueries.length = 0;
+
+  runtime.triggerMutation([{
+    addedNodes: [first.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+  runtime.triggerMutation([{
+    addedNodes: [second.dialog],
+    removedNodes: [],
+    target: runtime.document.body,
+    type: "childList"
+  }]);
+
+  assert.equal(runtime.animationFrames.length, 1);
+  runtime.flushAnimationFrames();
+  const globalQueries = runtime.selectorQueries.filter(query =>
+    query.root === runtime.document.documentElement
+  );
+
+  assert.ok(first.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+  assert.ok(second.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ));
+  assert.equal(unobserved.toolbar.querySelector(
+    "[data-tex-for-gmail-toolbar-button]"
+  ), undefined);
+  assert.deepEqual(globalQueries, []);
 });
 
 test("Gmail toolbar rebinds a retained button after its editor is replaced",
@@ -1715,7 +1863,13 @@ test("Gmail toolbar rebinds a retained button after its editor is replaced",
     const replacement = runtime.createEditor("$new$");
     runtime.editor.replaceWith(replacement);
 
-    runtime.api.syncGmailToolbars();
+    runtime.triggerMutation([{
+      addedNodes: [replacement],
+      removedNodes: [runtime.editor],
+      target: runtime.dialog,
+      type: "childList"
+    }]);
+    runtime.flushAnimationFrames();
     const button = runtime.toolbar.querySelector(selector);
 
     assert.notEqual(button, staleButton);
@@ -1736,7 +1890,7 @@ test("Gmail toolbar rebinds a retained button after its editor is replaced",
     assert.deepEqual(runtime.requests.map(request => request.source), ["new"]);
   });
 
-test("Gmail toolbar repairs a cloned button without event listeners", async () => {
+test("Gmail toolbar repairs cloned and removed buttons", async () => {
   const runtime = loadComposeContent("$x$");
   const selector = "[data-tex-for-gmail-toolbar-button]";
   const dynamic = runtime.createCompose("$y$");
@@ -1745,7 +1899,13 @@ test("Gmail toolbar repairs a cloned button without event listeners", async () =
   clone.textContent = "∑";
   dynamic.toolbar.insertBefore(clone, dynamic.bold.nextSibling);
 
-  runtime.api.syncGmailToolbars();
+  runtime.triggerMutation([{
+    addedNodes: [clone],
+    removedNodes: [],
+    target: dynamic.toolbar,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
   const button = dynamic.toolbar.querySelector(selector);
 
   assert.notEqual(button, clone);
@@ -1756,7 +1916,19 @@ test("Gmail toolbar repairs a cloned button without event listeners", async () =
   assert.equal(button.listeners.get("mousedown")?.length, 1);
   assert.equal(button.listeners.get("click")?.length, 1);
 
-  button.dispatchEvent({ type: "click" });
+  button.remove();
+  runtime.triggerMutation([{
+    addedNodes: [],
+    removedNodes: [button],
+    target: dynamic.toolbar,
+    type: "childList"
+  }]);
+  runtime.flushAnimationFrames();
+  const replacement = dynamic.toolbar.querySelector(selector);
+  assert.notEqual(replacement, button);
+  assert.equal(replacement.listeners.get("click")?.length, 1);
+
+  replacement.dispatchEvent({ type: "click" });
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(runtime.requests.map(request => request.source), ["y"]);
 });
