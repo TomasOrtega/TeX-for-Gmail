@@ -16,6 +16,7 @@ const {
   protocolConnection,
   removeTemporaryTree,
   requirePng,
+  STYLED_UNICODE_FIXTURES,
   terminateBrowser,
   waitForEvaluation
 } = require("../scripts/smoke-browser.js");
@@ -39,6 +40,21 @@ test("extension browser smoke covers renderer regressions in Gmail", () => {
   ]) {
     assert.ok(document.includes(`data-smoke-render="${fixture[0]}"`));
     assert.ok(document.includes(fixture[1]));
+  }
+  assert.deepEqual(STYLED_UNICODE_FIXTURES, [
+    { label: "unicode-normal", source: String.raw`\mathrm{é}` },
+    { label: "unicode-bold", source: String.raw`\mathbf{é}` },
+    { label: "unicode-italic", source: String.raw`\mathit{é}` },
+    {
+      label: "unicode-bold-italic",
+      source: String.raw`\boldsymbol{\mathit{é}}`
+    },
+    { label: "unicode-sans-serif", source: String.raw`\mathsf{é}` },
+    { label: "unicode-monospace", source: String.raw`\mathtt{é}` }
+  ]);
+  for (const { label, source } of STYLED_UNICODE_FIXTURES) {
+    assert.ok(document.includes(`data-smoke-render="${label}"`));
+    assert.ok(document.includes(`\\(${source}\\)`));
   }
 });
 
@@ -79,8 +95,13 @@ test("browser smoke fixture covers the supported AMS and font features", () => {
     "double-struck.js",
     "fraktur.js",
     "latin.js",
+    "latin-b.js",
+    "latin-bi.js",
+    "latin-i.js",
     "math.js",
+    "monospace-l.js",
     "monospace.js",
+    "sans-serif-r.js",
     "sans-serif.js",
     "shapes.js",
     "symbols-b-i.js"

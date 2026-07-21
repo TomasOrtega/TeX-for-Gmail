@@ -35,7 +35,8 @@ npm run reproduce:firefox
 
 `package-lock.json` pins the exact official `@mathjax/src` and
 `@mathjax/mathjax-newcm-font` 4.1.3 packages. The repository's vendor script
-copies the reviewed runtime files byte-for-byte from those packages.
+copies the reviewed runtime files byte-for-byte from those packages, including
+every SVG font module reachable from the pinned font's dynamic-file map.
 `artifacts.lock.json` records the component versions, sources, sizes, and
 SHA-256 digests of vendored runtime files. The reproduction command checks
 those files, runs the complete coverage gate and Firefox linter, scans and

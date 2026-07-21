@@ -123,25 +123,18 @@ test("packaged MathJax files exactly match pinned npm artifacts", () => {
   assert.equal(packageLock.packages[""].devDependencies["@mathjax/src"], "4.1.3");
   const { check, files } = require("../scripts/vendor-mathjax.js");
   assert.equal(check(), files.length);
-  assert.deepEqual(
-    files.map(file => file.destination).sort(),
-    [
-      "LICENSE",
-      "input/tex/extensions/begingroup.js",
-      "input/tex/extensions/boldsymbol.js",
-      "mathjax-newcm-font/svg/dynamic/arrows.js",
-      "mathjax-newcm-font/svg/dynamic/calligraphic.js",
-      "mathjax-newcm-font/svg/dynamic/double-struck.js",
-      "mathjax-newcm-font/svg/dynamic/fraktur.js",
-      "mathjax-newcm-font/svg/dynamic/latin.js",
-      "mathjax-newcm-font/svg/dynamic/math.js",
-      "mathjax-newcm-font/svg/dynamic/monospace.js",
-      "mathjax-newcm-font/svg/dynamic/sans-serif.js",
-      "mathjax-newcm-font/svg/dynamic/shapes.js",
-      "mathjax-newcm-font/svg/dynamic/symbols-b-i.js",
-      "tex-svg.js"
-    ]
+  const { MathJaxNewcmFont } = require(
+    "@mathjax/mathjax-newcm-font/cjs/svg.js"
   );
+  const upstreamDynamicFiles = Object.values(MathJaxNewcmFont.dynamicFiles)
+    .map(({ file }) => `mathjax-newcm-font/svg/dynamic/${file}.js`)
+    .sort();
+  const vendoredDynamicFiles = files
+    .map(file => file.destination)
+    .filter(destination => destination.includes("/dynamic/"))
+    .sort();
+
+  assert.deepEqual(vendoredDynamicFiles, upstreamDynamicFiles);
 });
 
 test("Firefox tooling uses the fixed, compatible ZIP parser", t => {

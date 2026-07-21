@@ -17,13 +17,25 @@ const MACRO_BASELINE_FIXTURE = String.raw`\frac{1}{2}`;
 const MACRO_ISOLATED_FIXTURE = String.raw`\frac {1}{2}`;
 const MACRO_MUTATION_FIXTURE =
   String.raw`\renewcommand{\frac}[2]{X}\frac{1}{2}`;
+const STYLED_UNICODE_FIXTURES = Object.freeze([
+  { label: "unicode-normal", source: String.raw`\mathrm{é}` },
+  { label: "unicode-bold", source: String.raw`\mathbf{é}` },
+  { label: "unicode-italic", source: String.raw`\mathit{é}` },
+  {
+    label: "unicode-bold-italic",
+    source: String.raw`\boldsymbol{\mathit{é}}`
+  },
+  { label: "unicode-sans-serif", source: String.raw`\mathsf{é}` },
+  { label: "unicode-monospace", source: String.raw`\mathtt{é}` }
+]);
 const SMOKE_RENDER_LABELS = Object.freeze([
   "feature",
   "inline",
   "inline-prefix",
   "macro-baseline",
   "macro-mutation",
-  "macro-isolated"
+  "macro-isolated",
+  ...STYLED_UNICODE_FIXTURES.map(({ label }) => label)
 ]);
 const DYNAMIC_FILES = Object.freeze([
   "arrows.js",
@@ -31,8 +43,13 @@ const DYNAMIC_FILES = Object.freeze([
   "double-struck.js",
   "fraktur.js",
   "latin.js",
+  "latin-b.js",
+  "latin-bi.js",
+  "latin-i.js",
   "math.js",
+  "monospace-l.js",
   "monospace.js",
+  "sans-serif-r.js",
   "sans-serif.js",
   "shapes.js",
   "symbols-b-i.js"
@@ -485,6 +502,9 @@ function gmailSmokeDocument() {
         <div data-smoke-render="macro-baseline">\\(${MACRO_BASELINE_FIXTURE}\\)</div>
         <div data-smoke-render="macro-mutation">\\(${MACRO_MUTATION_FIXTURE}\\)</div>
         <div data-smoke-render="macro-isolated">\\(${MACRO_ISOLATED_FIXTURE}\\)</div>
+        ${STYLED_UNICODE_FIXTURES.map(({ label, source }) =>
+          `<div data-smoke-render="${label}">\\(${escapeHtml(source)}\\)</div>`
+        ).join("\n        ")}
       </div>
     </div>
   </body>
@@ -1089,6 +1109,7 @@ module.exports = {
   removeTemporaryTree,
   requirePng,
   smokeBrowser,
+  STYLED_UNICODE_FIXTURES,
   terminateBrowser,
   waitForEvaluation
 };
