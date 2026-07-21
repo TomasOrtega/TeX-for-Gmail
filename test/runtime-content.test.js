@@ -663,6 +663,7 @@ function loadComposeContent(source, options = {}) {
     connectCount: () => connectCount,
     additionalEditors,
     createCompose,
+    createEditor,
     createElement(tagName) {
       return new FakeElement(tagName);
     },
@@ -1508,4 +1509,58 @@ test("Gmail toolbar activation tracks dynamically added compose windows", async 
 
   const noObserver = loadComposeContent("$x$", { noMutationObserver: true });
   assert.ok(noObserver.toolbar.querySelector("[data-tex-for-gmail-toolbar-button]"));
+});
+
+test("Gmail toolbar rebinds a retained button after its editor is replaced",
+  async () => {
+    const runtime = loadComposeContent("$old$");
+    const selector = "[data-tex-for-gmail-toolbar-button]";
+    const staleButton = runtime.toolbar.querySelector(selector);
+    const replacement = runtime.createEditor("$new$");
+    runtime.editor.replaceWith(replacement);
+
+    runtime.api.syncGmailToolbars();
+    const button = runtime.toolbar.querySelector(selector);
+
+    assert.notEqual(button, staleButton);
+    assert.equal(staleButton.isConnected, false);
+    assert.equal(replacement.listeners.get("beforeinput")?.length, 1);
+    assert.equal(replacement.listeners.get("dblclick")?.length, 1);
+    assert.equal(button.listeners.get("mousedown")?.length, 1);
+    assert.equal(button.listeners.get("click")?.length, 1);
+
+    runtime.api.syncGmailToolbars();
+    assert.equal(runtime.toolbar.querySelector(selector), button);
+    assert.equal(replacement.listeners.get("beforeinput")?.length, 1);
+    assert.equal(replacement.listeners.get("dblclick")?.length, 1);
+    assert.equal(button.listeners.get("click")?.length, 1);
+
+    button.dispatchEvent({ type: "click" });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(runtime.requests.map(request => request.source), ["new"]);
+  });
+
+test("Gmail toolbar repairs a cloned button without event listeners", async () => {
+  const runtime = loadComposeContent("$x$");
+  const selector = "[data-tex-for-gmail-toolbar-button]";
+  const dynamic = runtime.createCompose("$y$");
+  const clone = runtime.createElement("button");
+  clone.dataset.texForGmailToolbarButton = "1";
+  clone.textContent = "∑";
+  dynamic.toolbar.insertBefore(clone, dynamic.bold.nextSibling);
+
+  runtime.api.syncGmailToolbars();
+  const button = dynamic.toolbar.querySelector(selector);
+
+  assert.notEqual(button, clone);
+  assert.equal(clone.isConnected, false);
+  assert.equal(dynamic.toolbar.querySelectorAll(selector).length, 1);
+  assert.equal(dynamic.editor.listeners.get("beforeinput")?.length, 1);
+  assert.equal(dynamic.editor.listeners.get("dblclick")?.length, 1);
+  assert.equal(button.listeners.get("mousedown")?.length, 1);
+  assert.equal(button.listeners.get("click")?.length, 1);
+
+  button.dispatchEvent({ type: "click" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(runtime.requests.map(request => request.source), ["y"]);
 });

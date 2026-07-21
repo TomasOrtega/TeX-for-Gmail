@@ -85,6 +85,7 @@ let statusTimer;
 let renderInProgress = false;
 let toolbarRefreshQueued = false;
 const configuredEditors = new WeakSet();
+const toolbarButtonEditors = new WeakMap();
 const renderedSources = new WeakMap();
 const renderedSourcesByToken = new Map();
 
@@ -690,10 +691,23 @@ function formattingAnchor(editor) {
 }
 
 function installGmailToolbarButton(editor) {
+  configureGmailEditor(editor);
   const anchor = formattingAnchor(editor);
   const parent = anchor?.parentElement;
-  if (!parent || parent.querySelector(TOOLBAR_BUTTON_SELECTOR))
+  if (!parent)
     return;
+
+  const buttons = [...parent.querySelectorAll(TOOLBAR_BUTTON_SELECTOR)];
+  const configuredButton = buttons.find(button =>
+    toolbarButtonEditors.get(button) === editor
+  );
+  if (configuredButton) {
+    for (const button of buttons) {
+      if (button !== configuredButton)
+        button.remove();
+    }
+    return;
+  }
 
   const button = document.createElement("button");
   button.type = "button";
@@ -706,8 +720,15 @@ function installGmailToolbarButton(editor) {
   button.addEventListener("click", () => {
     void renderAllMathInEditor(editor);
   });
-  parent.insertBefore(button, anchor.nextSibling);
-  configureGmailEditor(editor);
+  toolbarButtonEditors.set(button, editor);
+
+  if (buttons.length) {
+    buttons[0].replaceWith(button);
+    for (const staleButton of buttons.slice(1))
+      staleButton.remove();
+  } else {
+    parent.insertBefore(button, anchor.nextSibling);
+  }
 }
 
 function syncGmailToolbars() {
